@@ -241,6 +241,9 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
                 @Override
                 public void run() {
                     try {
+                        if ( LOG.isDebugEnabled() ) {
+                            LOG.debug("uri:{} force finished timeout, so force detach.", _uri);
+                        }
                         _forceFinishedTimer = null;
                         setFinishedStatus(TransactionConstants.FINISHED_TIMEOUT);
                         selfEventReceiver().acceptEvent("detach");
