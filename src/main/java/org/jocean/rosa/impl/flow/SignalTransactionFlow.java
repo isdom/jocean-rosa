@@ -166,6 +166,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
         }
         this._scheduleTimer = this.selfExectionLoop().schedule(
                 this.getInterfaceAdapter(Runnable.class), delayMillis);
+        tryStartForceFinishedTimer();
         return SCHEDULE;
     }
     

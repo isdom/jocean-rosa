@@ -172,6 +172,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
         }
         this._scheduleTimer = this.selfExectionLoop().schedule(
                 this.getInterfaceAdapter(Runnable.class), delayMillis);
+        tryStartForceFinishedTimer();
         return SCHEDULE;
     }
     
