@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.jocean.idiom.ExectionLoop;
+import org.jocean.rosa.api.ApiUtils;
 import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
@@ -51,7 +52,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		this._stack = httpStack;
 		this._source = source;
 		this._handler = handler;
-		this._exectionLoop = new HandlerExectionLoop(this._handler);
+		this._exectionLoop = ApiUtils.genExectionLoopOf(this._handler);
 	}
 	
 	public BusinessServerImpl registerReuestType(final Class<?> reqCls, final URI uri) {

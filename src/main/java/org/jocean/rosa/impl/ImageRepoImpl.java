@@ -6,6 +6,7 @@ package org.jocean.rosa.impl;
 import java.net.URI;
 
 import org.jocean.idiom.ExectionLoop;
+import org.jocean.rosa.api.ApiUtils;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.api.ImageRepoAgent;
 import org.jocean.rosa.api.ImageTransaction;
@@ -49,7 +50,7 @@ public class ImageRepoImpl implements ImageRepoAgent {
 		this._source = source;
 		this._handler = handler;
 		this._partRepo = repo;
-        this._exectionLoop = new HandlerExectionLoop(this._handler);
+        this._exectionLoop = ApiUtils.genExectionLoopOf(this._handler);
 	}
 	
 	private final HttpStack _stack;
