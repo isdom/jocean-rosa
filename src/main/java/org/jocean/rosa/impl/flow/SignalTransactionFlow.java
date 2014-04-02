@@ -191,8 +191,11 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	        final SignalReactor<RESP> reactor, 
 	        final TransactionPolicy policy) {
 		this._signalReactor = reactor;
-        this._maxRetryCount = policy.maxRetryCount();
-        this._timeoutFromActived = policy.timeoutFromActived();
+		
+        if ( null != policy ) {
+            this._maxRetryCount = policy.maxRetryCount();
+            this._timeoutFromActived = policy.timeoutFromActived();
+        }
 		
 		startObtainHttpClient();
 		return OBTAINING;

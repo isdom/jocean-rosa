@@ -204,8 +204,11 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 	private EventHandler onImageTransactionStart(
 	        final ImageReactor reactor, final TransactionPolicy policy) {
         this._imageReactor = reactor;
-        this._maxRetryCount = policy.maxRetryCount();
-        this._timeoutFromActived = policy.timeoutFromActived();
+        
+        if ( null != policy ) {
+            this._maxRetryCount = policy.maxRetryCount();
+            this._timeoutFromActived = policy.timeoutFromActived();
+        }
         
         updatePartAndStartObtainHttpClient();
 		return OBTAINING;
