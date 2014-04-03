@@ -47,11 +47,11 @@
         <dependency org="org.jocean" name="jocean-idiom" rev="0.0.6" 
             conf="compile->default(*)" />
         
-        <dependency org="org.jocean" name="jocean-syncfsm" rev="0.0.8" 
-            conf="compile->default(*)" transitive="false"/>
+        <dependency org="org.jocean" name="jocean-syncfsm" rev="0.0.9-SNAPSHOT" 
+            conf="compile->default(*)" transitive="false" changing="true"/>
         
-        <dependency org="org.jocean" name="jocean-transportclient" rev="0.0.4" 
-            conf="compile->default(*)" transitive="false"/>
+        <dependency org="org.jocean" name="jocean-transportclient" rev="0.0.5-SNAPSHOT" 
+            conf="compile->default(*)" transitive="false" changing="true"/>
         
         <dependency org="com.google.android" name="android" rev="2.3.3" transitive="false"/>
                 

@@ -30,7 +30,7 @@ import org.jocean.syncfsm.api.BizStep;
 import org.jocean.syncfsm.api.EventHandler;
 import org.jocean.syncfsm.api.EventReceiver;
 import org.jocean.syncfsm.api.FlowLifecycleListener;
-import org.jocean.syncfsm.api.annotion.OnEvent;
+import org.jocean.syncfsm.api.annotation.OnEvent;
 import org.jocean.transportclient.HttpStack;
 import org.jocean.transportclient.TransportUtils;
 import org.jocean.transportclient.api.HttpClient;
@@ -255,7 +255,8 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 		return RECVCONTENT;
 	}
 
-	@OnEvent(event = "onLastHttpContentReceived")
+	@SuppressWarnings("unchecked")
+    @OnEvent(event = "onLastHttpContentReceived")
 	private EventHandler lastContentReceived(final LastHttpContent content) throws Exception {
 		TransportUtils.readByteBufToBytesList(content.content(), this._bytesList);
 		

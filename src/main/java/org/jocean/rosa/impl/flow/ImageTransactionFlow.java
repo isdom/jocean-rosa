@@ -33,7 +33,7 @@ import org.jocean.syncfsm.api.BizStep;
 import org.jocean.syncfsm.api.EventHandler;
 import org.jocean.syncfsm.api.EventReceiver;
 import org.jocean.syncfsm.api.FlowLifecycleListener;
-import org.jocean.syncfsm.api.annotion.OnEvent;
+import org.jocean.syncfsm.api.annotation.OnEvent;
 import org.jocean.transportclient.HttpStack;
 import org.jocean.transportclient.TransportUtils;
 import org.jocean.transportclient.api.HttpClient;
