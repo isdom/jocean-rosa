@@ -5,10 +5,7 @@ package org.jocean.rosa.api;
 
 import io.netty.handler.codec.http.HttpResponse;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 
 /**
  * @author isdom
@@ -16,28 +13,27 @@ import java.util.List;
  */
 public class HttpBodyPart {
 	
-	public HttpBodyPart(final HttpResponse response, final List<byte[]> bytesList) {
+	public HttpBodyPart(final HttpResponse response, final Blob blob) {
 		this._response = response;
-		this._bytesList.addAll( bytesList );
+		this._blob = blob;
 	}
 	
-	public HttpResponse getHttpResponse() {
+	public HttpResponse httpResponse() {
 		return this._response;
 	}
 	
-	public Collection<byte[]> getParts() {
-		return Collections.unmodifiableCollection( this._bytesList );
+	public Collection<byte[]> parts() {
+		return this._blob.bytesCollection();
 	}
 	
+    public Blob blob() {
+        return this._blob;
+    }
+    
 	public int byteCount() {
-		int totalSize = 0;
-		for ( byte[] bytes : this._bytesList) {
-			totalSize += bytes.length;
-		}
-		
-		return totalSize;
+		return this._blob.length();
 	}
 	
 	private final HttpResponse _response;
-	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
+	private final Blob _blob;
 }

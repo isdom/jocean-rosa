@@ -12,18 +12,16 @@ import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 
-import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
-import org.jocean.idiom.ByteArrayListInputStream;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.rosa.DefaultBlob;
+import org.jocean.rosa.api.BlobReactor;
 import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
-import org.jocean.rosa.api.ImageReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
 import org.jocean.syncfsm.api.AbstractFlow;
@@ -43,20 +41,17 @@ import org.jocean.transportclient.http.HttpUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-
 /**
  * @author isdom
  *
  */
-public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow> 
+public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> 
     implements ArgsHandlerSource {
 
 	private static final Logger LOG = LoggerFactory
-			.getLogger("ImageTransactionFlow");
+			.getLogger("BlobTransactionFlow");
 
-    public ImageTransactionFlow(
+    public BlobTransactionFlow(
             final HttpStack stack, 
             final URI uri,
             final HttpBodyPartRepo repo) {
@@ -64,16 +59,16 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
         this._uri = uri;
         this._partRepo = repo;
         
-        addFlowLifecycleListener(new FlowLifecycleListener<ImageTransactionFlow>() {
+        addFlowLifecycleListener(new FlowLifecycleListener<BlobTransactionFlow>() {
 
             @Override
             public void afterEventReceiverCreated(
-                    final ImageTransactionFlow flow, final EventReceiver receiver)
+                    final BlobTransactionFlow flow, final EventReceiver receiver)
                     throws Exception {
             }
 
             @Override
-            public void afterFlowDestroy(final ImageTransactionFlow flow)
+            public void afterFlowDestroy(final BlobTransactionFlow flow)
                     throws Exception {
                 if ( null != _forceFinishedTimer) {
                     _forceFinishedTimer.detach();
@@ -88,31 +83,31 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
         return TransportUtils.getSafeRetainArgsHandler();
     }
     
-	public final BizStep WAIT = new BizStep("image.WAIT")
-			.handler(selfInvoker("onImageTransactionStart"))
+	public final BizStep WAIT = new BizStep("blob.WAIT")
+			.handler(selfInvoker("onTransactionStart"))
 			.handler(selfInvoker("onDetach"))
 			.freeze();
 	
-	private final BizStep OBTAINING = new BizStep("image.OBTAINING")
+	private final BizStep OBTAINING = new BizStep("blob.OBTAINING")
 			.handler(selfInvoker("onHttpObtained"))
 			.handler(selfInvoker("onHttpLost"))
 			.handler(selfInvoker("onDetach"))
 			.freeze();
 
-	private final BizStep RECVRESP = new BizStep("image.RECVRESP")
+	private final BizStep RECVRESP = new BizStep("blob.RECVRESP")
 			.handler(selfInvoker("responseReceived"))
 			.handler(selfInvoker("onHttpLost"))
 			.handler(selfInvoker("onDetach"))
 			.freeze();
 	
-	private final BizStep RECVCONTENT = new BizStep("image.RECVCONTENT")
+	private final BizStep RECVCONTENT = new BizStep("blob.RECVCONTENT")
 			.handler(selfInvoker("contentReceived"))
 			.handler(selfInvoker("lastContentReceived"))
 			.handler(selfInvoker("onDetachAndSaveUncompleteContent"))
 			.handler(selfInvoker("onHttpLostAndSaveUncompleteContent"))
 			.freeze();
 
-    private final BizStep SCHEDULE = new BizStep("image.SCHEDULE")
+    private final BizStep SCHEDULE = new BizStep("blob.SCHEDULE")
             .handler(selfInvoker("onScheduled"))
             .handler(selfInvoker("schedulingOnDetach"))
             .freeze();
@@ -120,7 +115,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 	@OnEvent(event="detach")
 	private EventHandler onDetach() throws Exception {
 		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("download image {} canceled", _uri);
+			LOG.debug("download blob {} canceled", _uri);
 		}
 		safeDetachHttpHandle();
 		return null;
@@ -130,7 +125,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 	private EventHandler onHttpLost()
 			throws Exception {
         if ( LOG.isDebugEnabled() ) {
-            LOG.debug("http for {} lost.", _uri);
+            LOG.debug("http for {} lost.", this._uri);
         }
 		notifyReactorTransportInactived();
 		return incRetryAndSelectStateByRetry();
@@ -155,7 +150,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
             }
             else {
                 if ( LOG.isDebugEnabled() ) {
-                    LOG.debug("uri:{} 's retry count is {} reached max retry {}, so image download canceled.",
+                    LOG.debug("uri:{} 's retry count is {} reached max retry {}, so blob download canceled.",
                        _uri, this._retryCount, this._maxRetryCount);
                 }
                 this.setFinishedStatus(TransactionConstants.FINISHED_RETRY_FAILED);
@@ -168,7 +163,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
         //  delay 1s, and re-try
         final long delayMillis = 10 * 1000L;
         if ( LOG.isDebugEnabled() ) {
-            LOG.debug("delay {}s and retry fetch image uri:{}", delayMillis / 1000, this._uri);
+            LOG.debug("delay {}s and retry fetch blob uri:{}", delayMillis / 1000, this._uri);
         }
         this._scheduleTimer = this.selfExectionLoop().schedule(
                 this.getInterfaceAdapter(Runnable.class), delayMillis);
@@ -186,7 +181,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
     @OnEvent(event="detach")
     private EventHandler schedulingOnDetach() throws Exception {
         if ( LOG.isDebugEnabled() ) {
-            LOG.debug("download image {} when scheduling and canceled", this._uri);
+            LOG.debug("download blob {} when scheduling and canceled", this._uri);
         }
         this._scheduleTimer.detach();
         safeDetachHttpHandle();
@@ -202,9 +197,9 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
     }
 
     @OnEvent(event = "start")
-	private EventHandler onImageTransactionStart(
-	        final ImageReactor reactor, final TransactionPolicy policy) {
-        this._imageReactor = reactor;
+	private EventHandler onTransactionStart(
+	        final BlobReactor reactor, final TransactionPolicy policy) {
+        this._blobReactor = reactor;
         
         if ( null != policy ) {
             this._maxRetryCount = policy.maxRetryCount();
@@ -217,12 +212,12 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 
 	@OnEvent(event = "onHttpClientObtained")
 	private EventHandler onHttpObtained(final HttpClient httpclient) {
-		if ( null != this._imageReactor ) {
+		if ( null != this._blobReactor ) {
 			try {
-				this._imageReactor.onTransportActived();
+				this._blobReactor.onTransportActived();
 			}
 			catch (Exception e) {
-				LOG.warn("exception when imageReactor.onTransportActived for uri:{}, detail:{}", 
+				LOG.warn("exception when BlobReactor.onTransportActived for uri:{}, detail:{}", 
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
 		}
@@ -264,39 +259,59 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("channel for {} recv response {}", this._uri, response);
 		}
-		final String contentType = response.headers().get(HttpHeaders.Names.CONTENT_TYPE);
-		if ( contentType != null ) {
-			if ( null != this._part ) {
-				// check if content range
-				final String contentRange = response.headers().get(HttpHeaders.Names.CONTENT_RANGE);
-				if ( null != contentRange ) {
-					// assume Partial
-					this._bytesList.addAll(this._part.getParts());
-					LOG.info("uri {}, recv partial get response, detail: {}", this._uri, contentRange);
-					
-					// 考虑 Content-Range 的情况
-					LOG.info("found Content-Range header, parse {}", contentRange);
-					final String partialBegin = HttpUtils.getPartialBeginFromContentRange(contentRange);
-					if ( null != partialBegin) {
-						this._currentPos = Long.parseLong(partialBegin);
-					}
-					final String partialTotal = HttpUtils.getPartialTotalFromContentRange(contentRange);
-					if ( null != partialTotal) {
-						this._totalLength = Long.parseLong(partialTotal);
-					}
+		
+		notifyContentType(response.headers().get(HttpHeaders.Names.CONTENT_TYPE));
+		
+		if ( null != this._part ) {
+			// check if content range
+			final String contentRange = response.headers().get(HttpHeaders.Names.CONTENT_RANGE);
+			if ( null != contentRange ) {
+				// assume Partial
+				this._bytesList.addAll(this._part.parts());
+				LOG.info("uri {}, recv partial get response, detail: {}", this._uri, contentRange);
+				
+				// 考虑 Content-Range 的情况
+				LOG.info("found Content-Range header, parse {}", contentRange);
+				final String partialBegin = HttpUtils.getPartialBeginFromContentRange(contentRange);
+				if ( null != partialBegin) {
+					this._currentPos = Long.parseLong(partialBegin);
+				}
+				final String partialTotal = HttpUtils.getPartialTotalFromContentRange(contentRange);
+				if ( null != partialTotal) {
+					this._totalLength = Long.parseLong(partialTotal);
 				}
 			}
-			LOG.info("uri {}, begin download from {} and total size {}", this._uri, this._currentPos, this._totalLength);
-			notifyCurrentProgress();
-			return RECVCONTENT;
+		}
+		
+		if ( LOG.isInfoEnabled() ) {
+		    LOG.info("uri {}, begin download from {} and total size {}", this._uri, this._currentPos, this._totalLength);
+		}
+		notifyCurrentProgress();
+		
+		if ( HttpUtils.isHttpResponseHasMoreContent(response) ) {
+	        return RECVCONTENT;
 		}
 		else {
-			LOG.info("get image failed, wrong contentType {}", contentType);
-			return	null;
+		    LOG.warn("uri:{} has no content, so end fetching blob", this._uri);
+		    this.setFinishedStatus(TransactionConstants.FINISHED_NOCONTENT);
+	        safeDetachHttpHandle();
+		    return null;
 		}
 	}
 
-	@OnEvent(event = "onHttpContentReceived")
+	private void notifyContentType(final String contentType) {
+        if ( null != this._blobReactor ) {
+            try {
+                this._blobReactor.onContentTypeReceived(contentType);
+            }
+            catch (Exception e) {
+                LOG.warn("exception when BlobReactor.onContentTypeReceived for uri:{} contentType:{}, detail:{}", 
+                        this._uri, contentType, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
+
+    @OnEvent(event = "onHttpContentReceived")
 	private EventHandler contentReceived(final HttpContent content) {
 		updateAndNotifyCurrentProgress(
 			TransportUtils.readByteBufToBytesList(content.content(), this._bytesList));
@@ -320,29 +335,18 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
             }
         }
         
-		final InputStream is = new ByteArrayListInputStream(this._bytesList);
-		
-		try {
-			final Bitmap bitmap = BitmapFactory.decodeStream(is);
-			if ( null != this._imageReactor && null != bitmap ) {
-				try {
-				    this.setFinishedStatus(TransactionConstants.FINISHED_SUCCEED);
-					this._imageReactor.onImageReceived(bitmap);
-				}
-				catch (Exception e) {
-					LOG.warn("exception when imageReactor.onImageReceived for uri:{}, detail:{}", 
-							this._uri, ExceptionUtils.exception2detail(e));
-				}
-			}
-		}
-		catch (Exception e) {
-			LOG.warn("exception when BitmapFactory.decodeStream for uri:{}, detail:{}", 
-					this._uri, ExceptionUtils.exception2detail(e));
-		}
-		finally {
-			is.close();
-		}
-		
+        this.setFinishedStatus(TransactionConstants.FINISHED_SUCCEED);
+        
+        if ( null != this._blobReactor ) {
+            try {
+                this._blobReactor.onBlobReceived(new DefaultBlob( this._bytesList ));
+            }
+            catch (Exception e) {
+                LOG.warn("exception when BlobReactor.onBlobReceived for uri:{}, detail:{}", 
+                        this._uri, ExceptionUtils.exception2detail(e));
+            }
+        }
+        
 		return null;
 	}
 
@@ -374,9 +378,9 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 	}
 	
 	private void notifyCurrentProgress() {
-		if ( null != this._imageReactor ) {
+		if ( null != this._blobReactor ) {
 			try {
-				this._imageReactor.onProgress(this._currentPos, this._totalLength);
+				this._blobReactor.onProgress(this._currentPos, this._totalLength);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when imageReactor.onProgress for uri:{} progress{}/{}, detail:{}", 
@@ -388,7 +392,7 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 	private void saveHttpBodyPart() {
 		if ( null != this._partRepo) {
 			try {
-                this._partRepo.put(this._uri, new HttpBodyPart(this._response, this._bytesList));
+                this._partRepo.put(this._uri, new HttpBodyPart(this._response, new DefaultBlob(this._bytesList)));
             } catch (Exception e) {
                 LOG.warn("exception when _partRepo.put for uri:{}, detail:{}", 
                         this._uri, ExceptionUtils.exception2detail(e));
@@ -408,8 +412,8 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 		
 		if ( null != part ) {
 			//	add Range info
-			request.headers().set(HttpHeaders.Names.RANGE, "bytes=" + sizeOf(part.getParts()) + "-");
-			final String etag = HttpHeaders.getHeader(part.getHttpResponse(), HttpHeaders.Names.ETAG);
+			request.headers().set(HttpHeaders.Names.RANGE, "bytes=" + part.blob().length() + "-");
+			final String etag = HttpHeaders.getHeader(part.httpResponse(), HttpHeaders.Names.ETAG);
 			if ( null != etag ) {
 				request.headers().set(HttpHeaders.Names.IF_RANGE, etag);
 			}
@@ -421,19 +425,10 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 		return request;
 	}
 	
-	private static int sizeOf(final Collection<byte[]> bytesList) {
-		int totalSize = 0;
-		for ( byte[] bytes : bytesList) {
-			totalSize += bytes.length;
-		}
-		
-		return totalSize;
-	}
-	
 	private void notifyReactorFinsihed() {
-		if ( null != this._imageReactor ) {
+		if ( null != this._blobReactor ) {
 			try {
-				this._imageReactor.onTransactionFinished(this._finishedStatus);
+				this._blobReactor.onTransactionFinished(this._finishedStatus);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when imageReactor.onTransactionFinsihed for uri:{}, detail:{}", 
@@ -446,9 +441,9 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
 	 * 
 	 */
 	private void notifyReactorTransportInactived() {
-		if ( null != this._imageReactor ) {
+		if ( null != this._blobReactor ) {
 			try {
-				this._imageReactor.onTransportInactived();
+				this._blobReactor.onTransportInactived();
 			}
 			catch (Exception e) {
 				LOG.warn("exception when imageReactor.onTransportInactived for uri:{}, detail:{}", 
@@ -506,5 +501,5 @@ public class ImageTransactionFlow extends AbstractFlow<ImageTransactionFlow>
     private int _finishedStatus = TransactionConstants.FINISHED_UNKNOWN;
 	
 	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
-	private ImageReactor _imageReactor;
+	private BlobReactor _blobReactor;
 }

@@ -3,13 +3,11 @@
  */
 package org.jocean.rosa.api;
 
-import android.graphics.Bitmap;
-
 /**
  * @author isdom
  *
  */
-public interface ImageReactor {
+public interface BlobReactor {
 	/**
 	 * transport layer actived for this image fetch action
 	 */
@@ -20,22 +18,29 @@ public interface ImageReactor {
 	 * @throws Exception
 	 */
 	public void onTransportInactived() throws Exception;
+
+    /**
+     * on content-type received, eg: "application/json" ...
+     * @param contentType
+     * @throws Exception
+     */
+    public void onContentTypeReceived(final String contentType) throws Exception;
 	
 	/**
-	 * image fetch action in progress, maybe invoke more than once
+	 * blob fetch action in progress, maybe invoke more than once
 	 * @param currentByteSize: current fetched bytes
 	 * @param totalByteSize: total bytes for image
 	 */
 	public void onProgress(final long currentByteSize, final long totalByteSize) throws Exception;
 
 	/**
-	 * image fetched succeed, and decode as bitmap
-	 * @param bitmap decoded bitmap
+	 * blob fetched succeed
+	 * @param blob : binary data
 	 */
-	public void onImageReceived(final Bitmap bitmap) throws Exception;
+	public void onBlobReceived(final Blob blob) throws Exception;
 	
 	/**
-	 * image fetch action finished, succeed or failed(timeout or decode failed)
+	 * image fetch action finished, succeed or failed(timeout or received failed)
 	 */
 	public void onTransactionFinished(final int status) throws Exception;
 

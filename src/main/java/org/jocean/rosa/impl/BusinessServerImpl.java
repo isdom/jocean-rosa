@@ -8,7 +8,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.jocean.idiom.ExectionLoop;
-import org.jocean.rosa.api.ApiUtils;
 import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
@@ -16,8 +15,6 @@ import org.jocean.syncfsm.api.EventReceiverSource;
 import org.jocean.transportclient.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import android.os.Handler;
 
 /**
  * @author isdom
@@ -48,11 +45,10 @@ public class BusinessServerImpl implements BusinessServerAgent {
 
 	public BusinessServerImpl(final HttpStack httpStack, 
 			final EventReceiverSource source, 
-			final Handler handler) {
+			final ExectionLoop exectionLoop) {
 		this._stack = httpStack;
 		this._source = source;
-		this._handler = handler;
-		this._exectionLoop = ApiUtils.genExectionLoopOf(this._handler);
+		this._exectionLoop = exectionLoop;
 	}
 	
 	public BusinessServerImpl registerReuestType(final Class<?> reqCls, final URI uri) {
@@ -62,7 +58,6 @@ public class BusinessServerImpl implements BusinessServerAgent {
 	
 	private final HttpStack _stack;
 	private final EventReceiverSource _source;
-	private final Handler _handler;
 	private final Map<Class<?>, URI> _req2uri = new HashMap<Class<?>, URI>();
 	private final ExectionLoop _exectionLoop;
 }
