@@ -25,17 +25,12 @@ public class DefaultBlobAgent implements BlobAgent {
 			LoggerFactory.getLogger("rose.impl.DefaultBlobAgent");
 
     @Override
-    public BlobTransaction createBlobTransaction(final URI uri) {
-        if ( null != uri ) {
-            final BlobTransactionFlow flow = 
-                    new BlobTransactionFlow( this._stack, uri, this._partRepo);
-            _source.create(flow, flow.WAIT, this._exectionLoop);
-            
-            return flow.getInterfaceAdapter(BlobTransaction.class);
-        }
-        else {
-            return  null;
-        }
+    public BlobTransaction createBlobTransaction() {
+        final BlobTransactionFlow flow = 
+                new BlobTransactionFlow( this._stack, this._partRepo);
+        _source.create(flow, flow.WAIT, this._exectionLoop);
+        
+        return flow.getInterfaceAdapter(BlobTransaction.class);
     }
 
 	public DefaultBlobAgent(final HttpStack httpStack, 

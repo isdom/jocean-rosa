@@ -196,6 +196,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
         if ( null != policy ) {
             this._maxRetryCount = policy.maxRetryCount();
             this._timeoutFromActived = policy.timeoutFromActived();
+            this._policy = policy;
         }
 		
 		startObtainHttpClient();
@@ -326,8 +327,13 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	}
 	
     private void startObtainHttpClient() {
-        this._handle = this._stack.createHttpClientHandle( this._uri );
-        this._handle.obtainHttpClient( this.getInterfaceAdapter(HttpReactor.class) );
+        this._handle = this._stack.createHttpClientHandle();
+        this._handle.obtainHttpClient( 
+                new HttpClientHandle.DefaultContext()
+                    .uri(this._uri)
+                    .priority( null != this._policy ? this._policy.priority() : 0)
+                    .interruptLowPriority( null != this._policy ? this._policy.interruptLowPriority() : false)
+                , this.getInterfaceAdapter(HttpReactor.class) );
     }
 
     private void safeDetachHttpHandle() {
@@ -352,6 +358,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
     private int _maxRetryCount = -1;
     private int _retryCount = 0;
     private long   _timeoutFromActived = -1;
+    private TransactionPolicy _policy = null;
 	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
 	private SignalReactor<RESP> _signalReactor;
     private HttpClientHandle _handle;

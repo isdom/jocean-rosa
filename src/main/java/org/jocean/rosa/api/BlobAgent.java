@@ -3,8 +3,6 @@
  */
 package org.jocean.rosa.api;
 
-import java.net.URI;
-
 /**
  * @author isdom
  *
@@ -16,5 +14,5 @@ public interface BlobAgent {
 	 * @param uri: uri for fetch blob
 	 * @return
 	 */
-	public BlobTransaction createBlobTransaction(final URI uri);
+	public BlobTransaction createBlobTransaction();
 }

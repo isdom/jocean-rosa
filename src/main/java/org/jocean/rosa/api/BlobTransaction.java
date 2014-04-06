@@ -3,6 +3,8 @@
  */
 package org.jocean.rosa.api;
 
+import java.net.URI;
+
 import org.jocean.idiom.Detachable;
 
 /**
@@ -10,5 +12,5 @@ import org.jocean.idiom.Detachable;
  *
  */
 public interface BlobTransaction extends Detachable {
-	public void start(final BlobReactor reactor, final TransactionPolicy policy);
+	public void start(final URI uri, final BlobReactor reactor, final TransactionPolicy policy);
 }

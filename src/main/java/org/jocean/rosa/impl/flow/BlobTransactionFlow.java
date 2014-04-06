@@ -53,10 +53,8 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
     public BlobTransactionFlow(
             final HttpStack stack, 
-            final URI uri,
             final HttpBodyPartRepo repo) {
         this._stack = stack;
-        this._uri = uri;
         this._partRepo = repo;
         
         addFlowLifecycleListener(new FlowLifecycleListener<BlobTransactionFlow>() {
@@ -198,12 +196,16 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
     @OnEvent(event = "start")
 	private EventHandler onTransactionStart(
-	        final BlobReactor reactor, final TransactionPolicy policy) {
+	        final URI uri,
+	        final BlobReactor reactor, 
+	        final TransactionPolicy policy) {
+        this._uri = uri;
         this._blobReactor = reactor;
         
         if ( null != policy ) {
             this._maxRetryCount = policy.maxRetryCount();
             this._timeoutFromActived = policy.timeoutFromActived();
+            this._policy = policy;
         }
         
         updatePartAndStartObtainHttpClient();
@@ -465,8 +467,13 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         else {
             this._part = null;
         }
-        this._handle = this._stack.createHttpClientHandle( this._uri );
-        this._handle.obtainHttpClient( this.getInterfaceAdapter(HttpReactor.class) );
+        this._handle = this._stack.createHttpClientHandle();
+        this._handle.obtainHttpClient( 
+                new HttpClientHandle.DefaultContext()
+                    .uri(this._uri)
+                    .priority( null != this._policy ? this._policy.priority() : 0)
+                    .interruptLowPriority( null != this._policy ? this._policy.interruptLowPriority() : false)
+                , this.getInterfaceAdapter(HttpReactor.class) );
     }
     
     private void safeDetachHttpHandle() {
@@ -485,12 +492,13 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         this._finishedStatus = status;
     }
     
-    private final URI _uri;
+    private URI _uri;
     private final HttpBodyPartRepo _partRepo;
     private final HttpStack _stack;
 	private int    _maxRetryCount = -1;
 	private int    _retryCount = 0;
     private long   _timeoutFromActived = -1;
+    private TransactionPolicy _policy = null;
 	private HttpClientHandle _handle;
 	private HttpBodyPart _part;
 	private HttpResponse _response;
