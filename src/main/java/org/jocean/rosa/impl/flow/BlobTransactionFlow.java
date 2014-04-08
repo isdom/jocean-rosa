@@ -226,7 +226,13 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("send http request {}", request);
 		}
-		httpclient.sendHttpRequest( request );
+		try {
+		    httpclient.sendHttpRequest( request );
+		}
+		catch (Exception e) {
+		    LOG.error("state({})/{}: exception when sendHttpRequest, detail:{}", 
+		            currentEventHandler().getName(), currentEvent(), ExceptionUtils.exception2detail(e));
+		}
 		tryStartForceFinishedTimer();
 		return RECVRESP;
 	}
