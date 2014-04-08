@@ -29,6 +29,11 @@ public class TransactionPolicy {
         return this;
     }
     
+    public TransactionPolicy timeoutBeforeRetry(final long timeout) {
+        this._timeoutBeforeRetry = timeout;
+        return this;
+    }
+    
     public int priority() {
         return this._priority;
     }
@@ -45,8 +50,13 @@ public class TransactionPolicy {
         return this._timeoutFromActived;
     }
     
+    public long timeoutBeforeRetry() {
+        return this._timeoutBeforeRetry;
+    }
+    
     private volatile int _maxRetryCount = -1;
     private volatile long _timeoutFromActived = -1;
+    private volatile long _timeoutBeforeRetry = -1;
     private volatile int _priority = 0;
     private volatile boolean _interruptLowPriority = false;
 }

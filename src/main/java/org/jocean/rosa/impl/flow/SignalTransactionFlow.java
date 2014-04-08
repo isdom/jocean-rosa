@@ -160,12 +160,11 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 
     private EventHandler delayRetry() {
         //  delay 1s, and re-try
-        final long delayMillis = 10 * 1000L;
         if ( LOG.isDebugEnabled() ) {
-            LOG.debug("delay {}s and retry fetch image uri:{}", delayMillis / 1000, this._uri);
+            LOG.debug("delay {}s and retry fetch signal uri:{}", this._timeoutBeforeRetry / 1000, this._uri);
         }
         this._scheduleTimer = this.selfExectionLoop().schedule(
-                this.getInterfaceAdapter(Runnable.class), delayMillis);
+                this.getInterfaceAdapter(Runnable.class), this._timeoutBeforeRetry);
         tryStartForceFinishedTimer();
         return SCHEDULE;
     }
@@ -196,6 +195,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
         if ( null != policy ) {
             this._maxRetryCount = policy.maxRetryCount();
             this._timeoutFromActived = policy.timeoutFromActived();
+            this._timeoutBeforeRetry = Math.max( policy.timeoutBeforeRetry(), this._timeoutBeforeRetry);
             this._policy = policy;
         }
 		
@@ -358,6 +358,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
     private int _maxRetryCount = -1;
     private int _retryCount = 0;
     private long   _timeoutFromActived = -1;
+    private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
 	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
 	private SignalReactor<RESP> _signalReactor;
