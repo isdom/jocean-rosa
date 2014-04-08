@@ -3,15 +3,13 @@
  */
 package org.jocean.rosa.impl;
 
-import java.net.URI;
-
 import org.jocean.idiom.ExectionLoop;
 import org.jocean.rosa.api.BlobAgent;
 import org.jocean.rosa.api.BlobTransaction;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.impl.flow.BlobTransactionFlow;
 import org.jocean.syncfsm.api.EventReceiverSource;
-import org.jocean.transportclient.HttpStack;
+import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -12,7 +12,7 @@ import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
 import org.jocean.syncfsm.api.EventReceiverSource;
-import org.jocean.transportclient.HttpStack;
+import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +26,8 @@ public class BusinessServerImpl implements BusinessServerAgent {
 			LoggerFactory.getLogger("rose.impl.BusinessServerImpl");
 
 	//	invoke in main UI thread
-	@Override
+	@SuppressWarnings("unchecked")
+    @Override
 	public <REQUEST, RESPONSE> SignalTransaction<REQUEST, RESPONSE> 
 		createSignalTransaction(final Class<REQUEST> reqCls, final Class<RESPONSE> respCls) {
 		final URI uri = this._req2uri.get(reqCls);
