@@ -477,7 +477,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
                 new HttpClientHandle.DefaultContext()
                     .uri(this._uri)
                     .priority( null != this._policy ? this._policy.priority() : 0)
-                    .interruptLowPriority( null != this._policy ? this._policy.interruptLowPriority() : false)
                 , this.getInterfaceAdapter(HttpReactor.class) );
     }
     

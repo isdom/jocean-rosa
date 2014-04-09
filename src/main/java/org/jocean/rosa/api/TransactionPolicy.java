@@ -14,11 +14,6 @@ public class TransactionPolicy {
         return this;
     }
     
-    public TransactionPolicy interruptLowPriority(final boolean interruptLowPriority) {
-        this._interruptLowPriority = interruptLowPriority;
-        return this;
-    }
-    
     public TransactionPolicy maxRetryCount(final int retryCount) {
         this._maxRetryCount = retryCount;
         return this;
@@ -38,10 +33,6 @@ public class TransactionPolicy {
         return this._priority;
     }
     
-    public boolean interruptLowPriority() {
-        return this._interruptLowPriority;
-    }
-    
     public int maxRetryCount() {
         return this._maxRetryCount;
     }
@@ -58,5 +49,4 @@ public class TransactionPolicy {
     private volatile long _timeoutFromActived = -1;
     private volatile long _timeoutBeforeRetry = -1;
     private volatile int _priority = 0;
-    private volatile boolean _interruptLowPriority = false;
 }
