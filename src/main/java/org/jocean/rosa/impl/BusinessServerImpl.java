@@ -7,11 +7,10 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.jocean.idiom.ExectionLoop;
+import org.jocean.event.api.EventReceiverSource;
 import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
-import org.jocean.syncfsm.api.EventReceiverSource;
 import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +34,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		if ( null != uri ) {
 			final SignalTransactionFlow<RESPONSE> flow = 
 					new SignalTransactionFlow<RESPONSE>(this._stack, uri, respCls);
-			_source.create(flow, flow.WAIT, this._exectionLoop);
+			_source.create(flow, flow.WAIT);
 			
 			return flow.getInterfaceAdapter(SignalTransaction.class);
 		}
@@ -44,12 +43,11 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		}
 	}
 
-	public BusinessServerImpl(final HttpStack httpStack, 
-			final EventReceiverSource source, 
-			final ExectionLoop exectionLoop) {
+	public BusinessServerImpl(
+	        final HttpStack httpStack, 
+			final EventReceiverSource source) {
 		this._stack = httpStack;
 		this._source = source;
-		this._exectionLoop = exectionLoop;
 	}
 	
 	public BusinessServerImpl registerReuestType(final Class<?> reqCls, final URI uri) {
@@ -60,5 +58,4 @@ public class BusinessServerImpl implements BusinessServerAgent {
 	private final HttpStack _stack;
 	private final EventReceiverSource _source;
 	private final Map<Class<?>, URI> _req2uri = new HashMap<Class<?>, URI>();
-	private final ExectionLoop _exectionLoop;
 }

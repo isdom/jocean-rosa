@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.rosa;
+package org.jocean.rosa.impl.flow;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ import org.jocean.rosa.api.Blob;
  * @author isdom
  *
  */
-public class DefaultBlob implements Blob {
+final class DefaultBlob implements Blob {
 
     public DefaultBlob(final Collection<byte[]> bytesCollecion) {
         this._bytesList = new ArrayList<byte[]>(bytesCollecion.size());

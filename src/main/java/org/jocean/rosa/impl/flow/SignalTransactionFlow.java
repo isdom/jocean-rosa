@@ -17,20 +17,19 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jocean.event.api.AbstractFlow;
+import org.jocean.event.api.ArgsHandler;
+import org.jocean.event.api.ArgsHandlerSource;
+import org.jocean.event.api.BizStep;
+import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.FlowLifecycleListener;
+import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.idiom.ByteArrayListInputStream;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.rosa.api.SignalReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
-import org.jocean.syncfsm.api.AbstractFlow;
-import org.jocean.syncfsm.api.ArgsHandler;
-import org.jocean.syncfsm.api.ArgsHandlerSource;
-import org.jocean.syncfsm.api.BizStep;
-import org.jocean.syncfsm.api.EventHandler;
-import org.jocean.syncfsm.api.EventReceiver;
-import org.jocean.syncfsm.api.FlowLifecycleListener;
-import org.jocean.syncfsm.api.annotation.OnEvent;
 import org.jocean.transportclient.TransportUtils;
 import org.jocean.transportclient.api.HttpClient;
 import org.jocean.transportclient.api.HttpClientHandle;
@@ -113,7 +112,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
             .freeze();
     
 	@OnEvent(event="detach")
-	private EventHandler onDetach() throws Exception {
+	private BizStep onDetach() throws Exception {
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("fetch response for uri:{} progress canceled", this._uri);
 		}
@@ -122,7 +121,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	}
 	
 	@OnEvent(event = "onHttpClientLost")
-	private EventHandler onHttpLost()
+	private BizStep onHttpLost()
 			throws Exception {
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("http for {} lost.", this._uri);
@@ -130,7 +129,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
         return incRetryAndSelectStateByRetry();
 	}
 
-    private EventHandler incRetryAndSelectStateByRetry() {
+    private BizStep incRetryAndSelectStateByRetry() {
         this._retryCount++;
         if ( this._maxRetryCount < 0 ) {
             if ( LOG.isDebugEnabled() ) {
@@ -158,7 +157,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
         }
     }
 
-    private EventHandler delayRetry() {
+    private BizStep delayRetry() {
         //  delay 1s, and re-try
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("delay {}s and retry fetch signal uri:{}", this._timeoutBeforeRetry / 1000, this._uri);
@@ -170,13 +169,13 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
     }
     
     @OnEvent(event = "run")
-    private EventHandler onScheduled() {
+    private BizStep onScheduled() {
         startObtainHttpClient();
         return OBTAINING;
     }
 
     @OnEvent(event="detach")
-    private EventHandler schedulingOnDetach() throws Exception {
+    private BizStep schedulingOnDetach() throws Exception {
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("fetch response for uri:{} when scheduling and canceled", this._uri);
         }
@@ -186,7 +185,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
     }
     
 	@OnEvent(event = "start")
-	private EventHandler onSignalTransactionStart(
+	private BizStep onSignalTransactionStart(
 	        final Object request, 
 	        final SignalReactor<RESP> reactor, 
 	        final TransactionPolicy policy) {
@@ -204,7 +203,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	}
 	
 	@OnEvent(event = "onHttpClientObtained")
-	private EventHandler onHttpObtained(final HttpClient httpclient) {
+	private BizStep onHttpObtained(final HttpClient httpclient) {
 		final HttpRequest request = genHttpRequest(this._uri);
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("send http request {}", request);
@@ -241,7 +240,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
     }
     
 	@OnEvent(event = "onHttpResponseReceived")
-	private EventHandler responseReceived(final HttpResponse response) {
+	private BizStep responseReceived(final HttpResponse response) {
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("channel for {} recv response {}", _uri, response);
 		}
@@ -257,14 +256,14 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	}
 
 	@OnEvent(event = "onHttpContentReceived")
-	private EventHandler contentReceived(final HttpContent content) {
+	private BizStep contentReceived(final HttpContent content) {
 		TransportUtils.readByteBufToBytesList(content.content(), this._bytesList);
 		return RECVCONTENT;
 	}
 
 	@SuppressWarnings("unchecked")
     @OnEvent(event = "onLastHttpContentReceived")
-	private EventHandler lastContentReceived(final LastHttpContent content) throws Exception {
+	private BizStep lastContentReceived(final LastHttpContent content) throws Exception {
 		TransportUtils.readByteBufToBytesList(content.content(), this._bytesList);
 		
         safeDetachHttpHandle();
