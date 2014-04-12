@@ -36,7 +36,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 					new SignalTransactionFlow<RESPONSE>(this._stack, uri, respCls);
 			_source.create(flow, flow.WAIT);
 			
-			return flow.getInterfaceAdapter(SignalTransaction.class);
+			return flow.queryInterfaceInstance(SignalTransaction.class);
 		}
 		else {
 			return	null;

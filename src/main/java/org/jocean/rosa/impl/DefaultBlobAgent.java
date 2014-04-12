@@ -27,7 +27,7 @@ public class DefaultBlobAgent implements BlobAgent {
                 new BlobTransactionFlow( this._stack, this._partRepo);
         _source.create(flow, flow.WAIT);
         
-        return flow.getInterfaceAdapter(BlobTransaction.class);
+        return flow.queryInterfaceInstance(BlobTransaction.class);
     }
 
 	public DefaultBlobAgent(

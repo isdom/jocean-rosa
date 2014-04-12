@@ -163,7 +163,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
             LOG.debug("delay {}s and retry fetch signal uri:{}", this._timeoutBeforeRetry / 1000, this._uri);
         }
         this._scheduleTimer = this.selfExectionLoop().schedule(
-                this.getInterfaceAdapter(Runnable.class), this._timeoutBeforeRetry);
+                this.queryInterfaceInstance(Runnable.class), this._timeoutBeforeRetry);
         tryStartForceFinishedTimer();
         return SCHEDULE;
     }
@@ -337,7 +337,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
                 new HttpClientHandle.DefaultContext()
                     .uri(this._uri)
                     .priority( null != this._policy ? this._policy.priority() : 0)
-                , this.getInterfaceAdapter(HttpReactor.class) );
+                , this.queryInterfaceInstance(HttpReactor.class) );
     }
 
     private void safeDetachHttpHandle() {
