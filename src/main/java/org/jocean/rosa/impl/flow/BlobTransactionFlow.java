@@ -104,7 +104,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 			.freeze();
 
     private final BizStep SCHEDULE = new BizStep("blob.SCHEDULE")
-            .handler(selfInvoker("onScheduled"))
             .handler(selfInvoker("schedulingOnDetach"))
             .freeze();
     
@@ -159,13 +158,15 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("delay {}s and retry fetch blob uri:{}", this._timeoutBeforeRetry / 1000, this._uri);
         }
-        this._scheduleTimer = this.selfExectionLoop().schedule(
-                this.queryInterfaceInstance(Runnable.class), this._timeoutBeforeRetry);
+        
         tryStartForceFinishedTimer();
-        return SCHEDULE;
+        return ((BizStep)this.fireDelayEventAndPush(
+                this.SCHEDULE.delayEvent(selfInvoker("onScheduled"))
+                    .delayMillis(this._timeoutBeforeRetry))
+                    .owner()).freeze();
     }
     
-    @OnEvent(event = "run")
+    @SuppressWarnings("unused")
     private BizStep onScheduled() {
         clearCurrentContent();
         updatePartAndStartObtainHttpClient();
@@ -177,7 +178,8 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("download blob {} when scheduling and canceled", this._uri);
         }
-        this._scheduleTimer.detach();
+        this.popAndCancelDealyEvents();
+//        this._scheduleTimer.detach();
         safeDetachHttpHandle();
         return null;
     }
@@ -507,7 +509,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private HttpResponse _response;
 	private long _totalLength = -1;
 	private long _currentPos = -1;
-	private Detachable _scheduleTimer;
+//	private Detachable _scheduleTimer;
     private Detachable _forceFinishedTimer;
     private int _finishedStatus = TransactionConstants.FINISHED_UNKNOWN;
 	
