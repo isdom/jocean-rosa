@@ -26,6 +26,7 @@ import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.rosa.api.BlobReactor;
+import org.jocean.rosa.api.DefaultBlob;
 import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.api.TransactionConstants;
