@@ -161,9 +161,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         
         tryStartForceFinishedTimer();
         return ((BizStep)this.fireDelayEventAndPush(
-                this.SCHEDULE.delayEvent(selfInvoker("onScheduled"))
-                    .delayMillis(this._timeoutBeforeRetry))
-                    .owner()).freeze();
+                this.SCHEDULE.makeDelayEvent(
+                    selfInvoker("onScheduled"), 
+                    this._timeoutBeforeRetry)))
+                .freeze();
     }
     
     @SuppressWarnings("unused")
