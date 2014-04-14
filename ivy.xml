@@ -31,7 +31,6 @@
     <configurations>
         <conf name="compile" visibility="public"/>
         <conf name="test" visibility="private" extends="compile" />
-        <conf name="runtime" visibility="public" extends="compile" />
         <conf name="develop" visibility="public" extends="compile" />
     </configurations>
     <publications>
