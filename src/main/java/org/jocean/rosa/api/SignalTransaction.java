@@ -9,6 +9,10 @@ import org.jocean.idiom.Detachable;
  * @author isdom
  *
  */
-public interface SignalTransaction<REQUEST, RESPONSE> extends Detachable {
-	public void start(final REQUEST request, final SignalReactor<RESPONSE> reactor, final TransactionPolicy policy);
+public interface SignalTransaction extends Detachable {
+	public <REQUEST, RESPONSE> void start(
+	        final REQUEST request, 
+	        final Class<RESPONSE> respCls,
+	        final SignalReactor<RESPONSE> reactor, 
+	        final TransactionPolicy policy);
 }

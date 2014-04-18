@@ -44,30 +44,36 @@ import com.alibaba.fastjson.JSON;
  * @author isdom
  *
  */
-public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionFlow<RESP>> 
+public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> 
     implements ArgsHandlerSource {
+    
+    public interface SignalConverter {
+        
+        public URI req2uri(final Class<?> reqCls);
+        
+        public HttpRequest processHttpRequest(final Object request, 
+                final HttpRequest httpRequest);
+    }
 
 	private static final Logger LOG = LoggerFactory
 			.getLogger("SignalTransactionFlow");
 
     public SignalTransactionFlow(
             final HttpStack stack, 
-            final URI uri, 
-            final Class<?> respCls) {
+            final SignalConverter signalConverter) {
         this._stack = stack;
-        this._uri = uri;
-        this._respCls = respCls;
+        this._converter = signalConverter;
         
-        addFlowLifecycleListener(new FlowLifecycleListener<SignalTransactionFlow<RESP>>() {
+        addFlowLifecycleListener(new FlowLifecycleListener<SignalTransactionFlow>() {
 
             @Override
             public void afterEventReceiverCreated(
-                    SignalTransactionFlow<RESP> flow, EventReceiver receiver)
+                    SignalTransactionFlow flow, EventReceiver receiver)
                     throws Exception {
             }
 
             @Override
-            public void afterFlowDestroy(SignalTransactionFlow<RESP> flow)
+            public void afterFlowDestroy(SignalTransactionFlow flow)
                     throws Exception {
                 if ( null != _forceFinishedTimer) {
                     _forceFinishedTimer.detach();
@@ -149,7 +155,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
             else {
                 if ( LOG.isDebugEnabled() ) {
                     LOG.debug("uri:{} 's retry count is {} reached max retry {}, so image download canceled.",
-                       _uri, this._retryCount, this._maxRetryCount);
+                       this._uri, this._retryCount, this._maxRetryCount);
                 }
                 this.setFinishedStatus(TransactionConstants.FINISHED_RETRY_FAILED);
                 return null;
@@ -187,9 +193,19 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	@OnEvent(event = "start")
 	private BizStep onSignalTransactionStart(
 	        final Object request, 
-	        final SignalReactor<RESP> reactor, 
+	        final Class<?> respCls,
+	        final SignalReactor<Object> reactor, 
 	        final TransactionPolicy policy) {
+	    this._request = request;
 		this._signalReactor = reactor;
+		this._respCls = respCls;
+		this._uri = this._converter.req2uri(request.getClass());
+		
+		if ( null == this._uri ) {
+		    // request not registered
+		    LOG.error("request ({}) !NOT! registered with a valid URI, so finished signal flow({})", request, this);
+		    return null;
+		}
 		
         if ( null != policy ) {
             this._maxRetryCount = policy.maxRetryCount();
@@ -204,7 +220,8 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	
 	@OnEvent(event = "onHttpClientObtained")
 	private BizStep onHttpObtained(final HttpClient httpclient) {
-		final HttpRequest request = genHttpRequest(this._uri);
+		final HttpRequest request = 
+		        this._converter.processHttpRequest( this._request, genHttpRequest(this._uri));
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("send http request {}", request);
 		}
@@ -242,7 +259,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 	@OnEvent(event = "onHttpResponseReceived")
 	private BizStep responseReceived(final HttpResponse response) {
 		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("channel for {} recv response {}", _uri, response);
+			LOG.debug("channel for {} recv response {}", this._uri, response);
 		}
 		final String contentType = response.headers().get(HttpHeaders.Names.CONTENT_TYPE);
 		if ( contentType != null && contentType.startsWith("application/json")) {
@@ -261,7 +278,6 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 		return RECVCONTENT;
 	}
 
-	@SuppressWarnings("unchecked")
     @OnEvent(event = "onLastHttpContentReceived")
 	private BizStep lastContentReceived(final LastHttpContent content) throws Exception {
 		TransportUtils.readByteBufToBytesList(content.content(), this._bytesList);
@@ -278,7 +294,7 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
 			}
 			try {
                 this.setFinishedStatus(TransactionConstants.FINISHED_SUCCEED);
-				this._signalReactor.onResponseReceived((RESP)JSON.parseObject(totalbytes, this._respCls));
+				this._signalReactor.onResponseReceived(JSON.parseObject(totalbytes, this._respCls));
 			}
 			catch (Exception e) {
 				LOG.warn("exception when signalReactor.onResponseReceived for uri:{}, detail:{}", 
@@ -357,15 +373,17 @@ public class SignalTransactionFlow<RESP> extends AbstractFlow<SignalTransactionF
     }
     
     private final HttpStack _stack;
-	private final URI _uri;
-	private final Class<?> _respCls;
+	private final SignalConverter _converter;
+	private Object _request;
+    private URI _uri;
+	private Class<?> _respCls;
     private int _maxRetryCount = -1;
     private int _retryCount = 0;
     private long   _timeoutFromActived = -1;
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
 	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
-	private SignalReactor<RESP> _signalReactor;
+	private SignalReactor<Object> _signalReactor;
     private HttpClientHandle _handle;
     private Detachable _scheduleTimer;
     private Detachable _forceFinishedTimer;

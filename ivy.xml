@@ -40,10 +40,16 @@
     </publications>
     <dependencies>
     
+        <dependency org="javax.ws.rs" name="javax.ws.rs-api" rev="2.0"
+            conf="compile->default(*)"/>
+        
 		<dependency org="org.slf4j" name="slf4j-api" rev="1.7.6" 
             conf="compile->default(*)" />
 			
-        <dependency org="org.jocean" name="jocean-transportclient" rev="0.0.6" 
+        <dependency org="org.jocean" name="jocean-idiom" rev="0.0.8-SNAPSHOT" 
+            conf="compile->default(*)" changing="true" />
+        
+		<dependency org="org.jocean" name="jocean-transportclient" rev="0.0.6" 
             conf="compile->default(*)"/>
         
         <dependency org="com.alibaba" name="fastjson" rev="1.1.34.android" transitive="false"/>

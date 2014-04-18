@@ -8,6 +8,5 @@ package org.jocean.rosa.api;
  *
  */
 public interface BusinessServerAgent {
-	public <REQUEST,RESPONSE> SignalTransaction<REQUEST, RESPONSE> 
-		createSignalTransaction(final Class<REQUEST> reqCls, final Class<RESPONSE> respCls);
+	public SignalTransaction createSignalTransaction();
 }
