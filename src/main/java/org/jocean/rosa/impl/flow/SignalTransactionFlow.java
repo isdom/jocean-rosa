@@ -49,7 +49,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     
     public interface SignalConverter {
         
-        public URI req2uri(final Class<?> reqCls);
+        public URI req2uri(final Object request);
         
         public HttpRequest processHttpRequest(final Object request, 
                 final HttpRequest httpRequest);
@@ -199,7 +199,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	    this._request = request;
 		this._signalReactor = reactor;
 		this._respCls = respCls;
-		this._uri = this._converter.req2uri(request.getClass());
+		this._uri = this._converter.req2uri(request);
 		
 		if ( null == this._uri ) {
 		    // request not registered

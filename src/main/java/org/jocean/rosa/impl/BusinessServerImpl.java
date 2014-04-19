@@ -11,9 +11,12 @@ import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.event.api.EventReceiverSource;
+import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
 import org.jocean.idiom.ReflectUtils;
@@ -53,19 +56,35 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		this._source = source;
 	}
 	
-	public BusinessServerImpl registerReuestType(final Class<?> reqCls, final URI uri) {
+	public BusinessServerImpl registerReuestType(final Class<?> reqCls, final String uri) {
 		this._req2uri.put(reqCls, uri);
 		return this;
 	}
 	
 	private final HttpStack _stack;
 	private final EventReceiverSource _source;
-	private final Map<Class<?>, URI> _req2uri = new HashMap<Class<?>, URI>();
+	private final Map<Class<?>, String> _req2uri = new HashMap<Class<?>, String>();
     private final SignalConverter _converter = new SignalConverter() {
 
         @Override
-        public URI req2uri(final Class<?> reqCls) {
-            return _req2uri.get(reqCls);
+        public URI req2uri(final Object request) {
+            final RequestProcessor processor = _requestProcessorCache.get(
+                    request.getClass(), _cacheIfAbsent);
+            
+            final String suffix = processor.apply(request);
+            
+            try {
+                if ( null == suffix ) {
+                    return new URI(_req2uri.get(request.getClass()));
+                }
+                else {
+                    return new URI(_req2uri.get(request.getClass()) + suffix);
+                }
+            } catch (Exception e) {
+                LOG.error("exception when generate URI for request({}), detail:{}",
+                        request, ExceptionUtils.exception2detail(e));
+                return null;
+            }
         }
 
         @Override
@@ -94,11 +113,39 @@ public class BusinessServerImpl implements BusinessServerAgent {
                     return new RequestProcessor(reqCls);
                 }};
     
-	private static final class RequestProcessor implements Visitor2<Object, HttpRequest> {
+	private static final class RequestProcessor 
+	    implements Function<Object, String>, Visitor2<Object, HttpRequest> {
 
 	    RequestProcessor(final Class<?> reqCls) {
+	        final Path path = reqCls.getAnnotation(Path.class);
+	        this._requestPath = null != path ? path.value() : null;
 	        this._queryFields = ReflectUtils.getAnnotationFieldsOf(reqCls, QueryParam.class);
+	        final Field[] pathparamFields = ReflectUtils.getAnnotationFieldsOf(reqCls, PathParam.class);
+	        if ( null != pathparamFields ) {
+	            this._pathparam2fields = new HashMap<String, Field>();
+	            for ( Field field : pathparamFields ) {
+	                this._pathparam2fields.put(
+	                        field.getAnnotation(PathParam.class).value(), field);
+	            }
+	        }
+	        else {
+	            this._pathparam2fields = null;
+	        }
 	    }
+	    
+        @Override
+        public String apply(final Object request) {
+            if ( null != this._pathparam2fields && null != this._requestPath ) {
+                return this._placeholderHelper.replacePlaceholders(
+                        request,
+                        this._requestPath, 
+                        this._placeholderResolver, 
+                        null);
+            }
+            else {
+                return null;
+            }
+        }
 	    
         @Override
         public void visit(final Object request, final HttpRequest httpRequest) 
@@ -134,5 +181,28 @@ public class BusinessServerImpl implements BusinessServerAgent {
         }
 	    
         private final Field[] _queryFields;
+        private final Map<String, Field> _pathparam2fields;
+        private final String _requestPath;
+        
+        private final PropertyPlaceholderHelper _placeholderHelper = 
+                new PropertyPlaceholderHelper("{", "}");
+        
+        private final PropertyPlaceholderHelper.PlaceholderResolver _placeholderResolver = 
+                new PropertyPlaceholderHelper.PlaceholderResolver() {
+            @Override
+            public String resolvePlaceholder(final Object request, final String placeholderName) {
+                final Field field = _pathparam2fields.get(placeholderName);
+                if ( null != field ) {
+                    try {
+                        return String.valueOf( field.get(request) );
+                    }
+                    catch (Exception e) {
+                        LOG.error("exception when get value for ({}).{}, detail: {}", 
+                                request, field.getName(), ExceptionUtils.exception2detail(e));
+                    }
+                }
+                // default by empty string, so placeholder will be erased from uri
+                return "";
+            }};
 	};
 }
