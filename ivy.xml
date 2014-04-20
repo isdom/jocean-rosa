@@ -25,7 +25,7 @@
        status="release" 
        publication="20101111120000">
         <description homepage="http://www.jocean.org">
-          jocean : rosa -- Remote Operation Service Agent(for Android)
+          jocean : rosa -- Remote Operation Service Agent
         </description>
     </info>
     <configurations>
