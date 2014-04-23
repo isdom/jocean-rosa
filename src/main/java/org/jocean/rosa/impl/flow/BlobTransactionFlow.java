@@ -409,15 +409,19 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		}
 	}
 	
-	private static HttpRequest genHttpRequest(final URI uri, final HttpBodyPart part) {
+	private HttpRequest genHttpRequest(final URI uri, final HttpBodyPart part) {
 		// Prepare the HTTP request.
 		final String host = uri.getHost() == null ? "localhost" : uri.getHost();
 
 		final HttpRequest request = new DefaultFullHttpRequest(
 				HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
 		request.headers().set(HttpHeaders.Names.HOST, host);
-		request.headers().set(HttpHeaders.Names.ACCEPT_ENCODING,
-				HttpHeaders.Values.GZIP);
+		
+		if ( null == this._policy 
+		    || ( null != this._policy && this._policy.gzipEnabled() ) ) {
+    		request.headers().set(HttpHeaders.Names.ACCEPT_ENCODING,
+    				HttpHeaders.Values.GZIP);
+		}
 		
 		if ( null != part ) {
 			//	add Range info

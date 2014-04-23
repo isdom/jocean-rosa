@@ -29,6 +29,11 @@ public class TransactionPolicy {
         return this;
     }
     
+    public TransactionPolicy enableGzip(final boolean enabled) {
+        this._gzipEnabled = enabled;
+        return this;
+    }
+    
     public int priority() {
         return this._priority;
     }
@@ -45,8 +50,13 @@ public class TransactionPolicy {
         return this._timeoutBeforeRetry;
     }
     
+    public boolean gzipEnabled() {
+        return this._gzipEnabled;
+    }
+    
     private volatile int _maxRetryCount = -1;
     private volatile long _timeoutFromActived = -1;
     private volatile long _timeoutBeforeRetry = -1;
     private volatile int _priority = 0;
+    private volatile boolean _gzipEnabled = true;
 }
