@@ -506,11 +506,72 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             this._part = null;
         }
         this._handle = this._stack.createHttpClientHandle();
+        final HttpClientHandle currentHandle = this._handle;
+        
         this._handle.obtainHttpClient( 
                 new HttpClientHandle.DefaultContext()
                     .uri(this._uri)
                     .priority( null != this._policy ? this._policy.priority() : 0)
-                , this.queryInterfaceInstance(HttpReactor.class) );
+                , 
+                new HttpReactor() {
+                    @Override
+                    public void onHttpClientObtained(HttpClient httpClient)
+                            throws Exception {
+                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
+                            queryInterfaceInstance(HttpReactor.class).onHttpClientObtained(httpClient);
+                        }
+                        else {
+                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpClientObtained", 
+                                    BlobTransactionFlow.this._handle, currentHandle);
+                        }
+                    }
+
+                    @Override
+                    public void onHttpClientLost() throws Exception {
+                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
+                            queryInterfaceInstance(HttpReactor.class).onHttpClientLost();
+                        }
+                        else {
+                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpClientLost", 
+                                    BlobTransactionFlow.this._handle, currentHandle);
+                        }
+                    }
+
+                    @Override
+                    public void onHttpResponseReceived(HttpResponse response)
+                            throws Exception {
+                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
+                            queryInterfaceInstance(HttpReactor.class).onHttpResponseReceived(response);
+                        }
+                        else {
+                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpResponseReceived", 
+                                    BlobTransactionFlow.this._handle, currentHandle);
+                        }
+                    }
+
+                    @Override
+                    public void onHttpContentReceived(HttpContent content)
+                            throws Exception {
+                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
+                            queryInterfaceInstance(HttpReactor.class).onHttpContentReceived(content);
+                        }
+                        else {
+                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpContentReceived", 
+                                    BlobTransactionFlow.this._handle, currentHandle);
+                        }
+                    }
+
+                    @Override
+                    public void onLastHttpContentReceived(
+                            LastHttpContent content) throws Exception {
+                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
+                            queryInterfaceInstance(HttpReactor.class).onLastHttpContentReceived(content);
+                        }
+                        else {
+                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onLastHttpContentReceived", 
+                                    BlobTransactionFlow.this._handle, currentHandle);
+                        }
+                    }});
     }
     
     private void safeDetachHttpHandle() {
@@ -537,7 +598,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     private long   _timeoutFromActived = -1;
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
-	private HttpClientHandle _handle;
+	private volatile HttpClientHandle _handle;
 	private HttpBodyPart _part;
 	private HttpResponse _response;
 	private long _totalLength = -1;
