@@ -272,17 +272,19 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		if ( !response.getStatus().equals(HttpResponseStatus.OK)
 		    && !response.getStatus().equals(HttpResponseStatus.PARTIAL_CONTENT)) {
 		    
+            safeDetachHttpHandle();
             safeRemovePartFromRepo();
 		    if ( response.getStatus().equals(HttpResponseStatus.REQUESTED_RANGE_NOT_SATISFIABLE)) {
 		        // 416 Requested Range Not Satisfiable
 		        // 清除 part 后，再次尝试完整获取 url
+		        // 此前的 httpClientHandle 已经 detach
+		        // so 如下直接开始重新获取
     	        clearCurrentContent();
     	        updatePartAndStartObtainHttpClient();
     	        return OBTAINING;
 		    }
 		    else {
                 this.setFinishedStatus(TransactionConstants.FINISHED_NOCONTENT);
-                safeDetachHttpHandle();
                 return null;
 		    }
 		}
