@@ -9,6 +9,7 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 
@@ -181,7 +182,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             LOG.debug("download blob {} when scheduling and canceled", this._uri);
         }
         this.popAndCancelDealyEvents();
-//        this._scheduleTimer.detach();
         safeDetachHttpHandle();
         return null;
     }
@@ -269,6 +269,24 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 			LOG.debug("channel for {} recv response {}", this._uri, response);
 		}
 		
+		if ( !response.getStatus().equals(HttpResponseStatus.OK)
+		    && !response.getStatus().equals(HttpResponseStatus.PARTIAL_CONTENT)) {
+		    
+            safeRemovePartFromRepo();
+		    if ( response.getStatus().equals(HttpResponseStatus.REQUESTED_RANGE_NOT_SATISFIABLE)) {
+		        // 416 Requested Range Not Satisfiable
+		        // 清除 part 后，再次尝试完整获取 url
+    	        clearCurrentContent();
+    	        updatePartAndStartObtainHttpClient();
+    	        return OBTAINING;
+		    }
+		    else {
+                this.setFinishedStatus(TransactionConstants.FINISHED_NOCONTENT);
+                safeDetachHttpHandle();
+                return null;
+		    }
+		}
+		
 		notifyContentType(response.headers().get(HttpHeaders.Names.CONTENT_TYPE));
 		
 		if ( null != this._part ) {
@@ -334,15 +352,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		
         safeDetachHttpHandle();
 
-        if ( null != this._partRepo ) {
-            try {
-                this._partRepo.remove(this._uri);
-            }
-            catch (Exception e) {
-                LOG.warn("exception when _partRepo.remove for uri:{}, detail:{}",
-                        this._uri, ExceptionUtils.exception2detail(e));
-            }
-        }
+        safeRemovePartFromRepo();
         
         this.setFinishedStatus(TransactionConstants.FINISHED_SUCCEED);
         
@@ -358,6 +368,21 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         
 		return null;
 	}
+
+    /**
+     * 
+     */
+    private void safeRemovePartFromRepo() {
+        if ( null != this._partRepo ) {
+            try {
+                this._partRepo.remove(this._uri);
+            }
+            catch (Exception e) {
+                LOG.warn("exception when _partRepo.remove for uri:{}, detail:{}",
+                        this._uri, ExceptionUtils.exception2detail(e));
+            }
+        }
+    }
 
 	@OnEvent(event="detach")
 	private BizStep onDetachAndSaveUncompleteContent() throws Exception {
@@ -515,7 +540,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private HttpResponse _response;
 	private long _totalLength = -1;
 	private long _currentPos = -1;
-//	private Detachable _scheduleTimer;
     private Detachable _forceFinishedTimer;
     private int _finishedStatus = TransactionConstants.FINISHED_UNKNOWN;
 	
