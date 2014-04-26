@@ -10,8 +10,8 @@ public interface SignalReactor<RESPONSE> {
 	public void onResponseReceived(final RESPONSE response) throws Exception;
 	
 	/**
-	 * signal transaction finished succeed or failed(timeout | deocde failed)
+	 * signal transaction failed(timeout | decode failed)
 	 * @throws Exception
 	 */
-	public void onTransactionFinished(final int status) throws Exception;
+	public void onTransactionFailure(final int failureReason) throws Exception;
 }

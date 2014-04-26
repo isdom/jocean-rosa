@@ -9,12 +9,12 @@ package org.jocean.rosa.api;
  */
 public interface BlobReactor {
 	/**
-	 * transport layer actived for this image fetch action
+	 * transport layer actived for this blob fetch action
 	 */
 	public void onTransportActived() throws Exception;
 
 	/**
-	 * transport layer inactived for this image fetch action
+	 * transport layer inactived for this blob fetch action
 	 * @throws Exception
 	 */
 	public void onTransportInactived() throws Exception;
@@ -40,8 +40,8 @@ public interface BlobReactor {
 	public void onBlobReceived(final Blob blob) throws Exception;
 	
 	/**
-	 * image fetch action finished, succeed or failed(timeout or received failed)
+	 * blob fetch action failed(timeout or received failed)
 	 */
-	public void onTransactionFinished(final int status) throws Exception;
+	public void onTransactionFailure(final int failureReason) throws Exception;
 
 }

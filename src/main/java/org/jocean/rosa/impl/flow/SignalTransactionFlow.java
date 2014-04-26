@@ -75,11 +75,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
             @Override
             public void afterFlowDestroy(SignalTransactionFlow flow)
                     throws Exception {
-                if ( null != _forceFinishedTimer) {
-                    _forceFinishedTimer.detach();
-                    _forceFinishedTimer = null;
+                if ( null != SignalTransactionFlow.this._forceFinishedTimer) {
+                    SignalTransactionFlow.this._forceFinishedTimer.detach();
+                    SignalTransactionFlow.this._forceFinishedTimer = null;
                 }
-                notifyReactorFinsihed();
+                notifyReactorFailureIfNeeded();
             }} );
     }
     
@@ -157,7 +157,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                     LOG.debug("uri:{} 's retry count is {} reached max retry {}, so image download canceled.",
                        this._uri, this._retryCount, this._maxRetryCount);
                 }
-                this.setFinishedStatus(TransactionConstants.FINISHED_RETRY_FAILED);
+                this.setFailureReason(TransactionConstants.FAILURE_RETRY_FAILED);
                 return null;
             }
         }
@@ -246,7 +246,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                             LOG.debug("uri:{} force finished timeout, so force detach.", _uri);
                         }
                         _forceFinishedTimer = null;
-                        setFinishedStatus(TransactionConstants.FINISHED_TIMEOUT);
+                        setFailureReason(TransactionConstants.FAILURE_TIMEOUT);
                         selfEventReceiver().acceptEvent("detach");
                     } catch (Exception e) {
                         LOG.warn("exception when acceptEvent detach by force finished for uri:{}, detail:{}", 
@@ -288,16 +288,22 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 		final byte[] totalbytes = new byte[sizeOf(_bytesList)];
 		is.read(totalbytes);
 		is.close();
-		if ( null != this._signalReactor ) {
-			if ( LOG.isDebugEnabled() ) {
+		
+        final SignalReactor<Object> reactor = this._signalReactor;
+        this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
+        
+        if ( null != reactor) {
+			if ( LOG.isTraceEnabled() ) {
 				printLongText(new String(totalbytes), 80);
 			}
 			try {
-                this.setFinishedStatus(TransactionConstants.FINISHED_SUCCEED);
-				this._signalReactor.onResponseReceived(JSON.parseObject(totalbytes, this._respCls));
+                reactor.onResponseReceived(JSON.parseObject(totalbytes, this._respCls));
+                if ( LOG.isTraceEnabled() ) {
+                    LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
+                }
 			}
 			catch (Exception e) {
-				LOG.warn("exception when signalReactor.onResponseReceived for uri:{}, detail:{}", 
+				LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
 		}
@@ -308,7 +314,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 		int pos = 0;
 		while ( pos < text.length() ) {
 			final int len = Math.min( text.length() - pos, size );
-			LOG.debug( "{}", text.substring(pos, pos + len) );
+			LOG.trace( "{}", text.substring(pos, pos + len) );
 			pos += size;
 		}
 	}
@@ -335,13 +341,13 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 		return totalSize;
 	}
 	
-	public void notifyReactorFinsihed() {
+	public void notifyReactorFailureIfNeeded() {
 		if ( null != this._signalReactor ) {
 			try {
-				this._signalReactor.onTransactionFinished(this._finishedStatus);
+				this._signalReactor.onTransactionFailure(this._failureReason);
 			}
 			catch (Exception e) {
-				LOG.warn("exception when signalReactor.onTransactionFinsihed for uri:{}, detail:{}", 
+				LOG.warn("exception when SignalReactor.onTransactionFailure for uri:{}, detail:{}", 
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
 		}
@@ -365,11 +371,12 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                 LOG.warn("exception when detach http handle for uri:{}, detail:{}",
                         this._uri, ExceptionUtils.exception2detail(e));
             }
+            this._handle = null;
         }
     }
     
-    private void setFinishedStatus(final int status) {
-        this._finishedStatus = status;
+    private void setFailureReason(final int failureReason) {
+        this._failureReason = failureReason;
     }
     
     private final HttpStack _stack;
@@ -387,5 +394,5 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     private HttpClientHandle _handle;
     private Detachable _scheduleTimer;
     private Detachable _forceFinishedTimer;
-    private int _finishedStatus = TransactionConstants.FINISHED_UNKNOWN;
+    private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
 }

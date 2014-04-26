@@ -68,11 +68,11 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             @Override
             public void afterFlowDestroy(final BlobTransactionFlow flow)
                     throws Exception {
-                if ( null != _forceFinishedTimer) {
-                    _forceFinishedTimer.detach();
-                    _forceFinishedTimer = null;
+                if ( null != BlobTransactionFlow.this._forceFinishedTimer) {
+                    BlobTransactionFlow.this._forceFinishedTimer.detach();
+                    BlobTransactionFlow.this._forceFinishedTimer = null;
                 }
-                notifyReactorFinsihed();
+                notifyReactorFailureIfNeeded();
             }} );
     }
 
@@ -150,7 +150,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
                     LOG.debug("uri:{} 's retry count is {} reached max retry {}, so blob download canceled.",
                        _uri, this._retryCount, this._maxRetryCount);
                 }
-                this.setFinishedStatus(TransactionConstants.FINISHED_RETRY_FAILED);
+                this.setFailureReason(TransactionConstants.FAILURE_RETRY_FAILED);
                 return null;
             }
         }
@@ -249,7 +249,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
                             LOG.debug("uri:{} force finished timeout, so force detach.", _uri);
                         }
                         _forceFinishedTimer = null;
-                        setFinishedStatus(TransactionConstants.FINISHED_TIMEOUT);
+                        setFailureReason(TransactionConstants.FAILURE_TIMEOUT);
                         selfEventReceiver().acceptEvent("detach");
                     } catch (Exception e) {
                         LOG.warn("exception when acceptEvent detach by force finished for uri:{}, detail:{}", 
@@ -284,7 +284,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     	        return OBTAINING;
 		    }
 		    else {
-                this.setFinishedStatus(TransactionConstants.FINISHED_NOCONTENT);
+                this.setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
                 return null;
 		    }
 		}
@@ -322,7 +322,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		}
 		else {
 		    LOG.warn("uri:{} has no content, so end fetching blob", this._uri);
-		    this.setFinishedStatus(TransactionConstants.FINISHED_NOCONTENT);
+		    this.setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
 	        safeDetachHttpHandle();
 		    return null;
 		}
@@ -356,11 +356,15 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
         safeRemovePartFromRepo();
         
-        this.setFinishedStatus(TransactionConstants.FINISHED_SUCCEED);
+        final BlobReactor reactor = this._blobReactor;
+        this._blobReactor = null;   // clear _blobReactor 字段，这样 onTransactionFailure 不会再被触发
         
-        if ( null != this._blobReactor ) {
+        if ( null != reactor) {
             try {
-                this._blobReactor.onBlobReceived(new DefaultBlob( this._bytesList ));
+                reactor.onBlobReceived(new DefaultBlob( this._bytesList ));
+                if ( LOG.isTraceEnabled() ) {
+                    LOG.trace("blobTransaction invoke onBlobReceived succeed. uri:({})", this._uri);
+                }
             }
             catch (Exception e) {
                 LOG.warn("exception when BlobReactor.onBlobReceived for uri:{}, detail:{}", 
@@ -465,13 +469,13 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		return request;
 	}
 	
-	private void notifyReactorFinsihed() {
+	private void notifyReactorFailureIfNeeded() {
 		if ( null != this._blobReactor ) {
 			try {
-				this._blobReactor.onTransactionFinished(this._finishedStatus);
+				this._blobReactor.onTransactionFailure(this._failureReason);
 			}
 			catch (Exception e) {
-				LOG.warn("exception when imageReactor.onTransactionFinsihed for uri:{}, detail:{}", 
+				LOG.warn("exception when BlobReactor.onTransactionFailure for uri:{}, detail:{}", 
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
 		}
@@ -583,11 +587,12 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
                 LOG.warn("exception when detach http handle for uri:{}, detail:{}",
                         this._uri, ExceptionUtils.exception2detail(e));
             }
+            this._handle = null;
         }
     }
     
-    private void setFinishedStatus(final int status) {
-        this._finishedStatus = status;
+    private void setFailureReason(final int failureReason) {
+        this._failureReason = failureReason;
     }
     
     private URI _uri;
@@ -604,7 +609,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private long _totalLength = -1;
 	private long _currentPos = -1;
     private Detachable _forceFinishedTimer;
-    private int _finishedStatus = TransactionConstants.FINISHED_UNKNOWN;
+    private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
 	
 	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
 	private BlobReactor _blobReactor;
