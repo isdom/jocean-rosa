@@ -451,7 +451,9 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             final Blob blob = this._bytesStream.drainToBlob();
 			try {
 			    if ( null != blob ) {
-			        this._partRepo.put(this._uri, new HttpBodyPart(this._response, blob));
+			        final HttpBodyPart bodyPart = new HttpBodyPart(this._response, blob);
+			        this._partRepo.put(this._uri, bodyPart);
+			        bodyPart.release();
 			    }
             } catch (Exception e) {
                 LOG.warn("exception when _partRepo.put for uri:{}, detail:{}", 
