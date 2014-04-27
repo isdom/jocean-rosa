@@ -310,27 +310,37 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
             blob.release();
 
             final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
-            
+            boolean feedbackResponse = false;
 			try {
 	            reader.startObject();
 	            if (reader.hasNext()) {
-	                reactor.onResponseReceived(reader.readObject(this._respCls));
-	                if ( LOG.isTraceEnabled() ) {
-	                    LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
+	                final Object resp = reader.readObject(this._respCls);
+	                if ( null != resp ) {
+	                    try {
+                            feedbackResponse = true;
+    	                    reactor.onResponseReceived(resp);
+    	                    if ( LOG.isTraceEnabled() ) {
+    	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
+    	                    }
+	                    }
+	                    catch (Exception e) {
+	                        LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
+	                                this._uri, ExceptionUtils.exception2detail(e));
+	                    }
 	                }
-	            }
-	            else {
-	                // ensure notify onTransactionFailure with FAILURE_NOCONTENT
-	                this._signalReactor = reactor;
-	                setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
 	            }
                 reader.endObject();
 			}
 			catch (Exception e) {
-				LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
+				LOG.warn("exception when prepare response for uri:{}, detail:{}", 
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
 			finally {
+                if ( !feedbackResponse ) {
+                    // ensure notify onTransactionFailure with FAILURE_NOCONTENT
+                    this._signalReactor = reactor;
+                    setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
+                }
                 reader.close();
 			}
 		}
