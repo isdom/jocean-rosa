@@ -14,8 +14,6 @@ import io.netty.handler.codec.http.LastHttpContent;
 
 import java.io.InputStream;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.ArgsHandler;
@@ -24,9 +22,11 @@ import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnEvent;
-import org.jocean.idiom.ByteArrayListInputStream;
+import org.jocean.idiom.Blob;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.pool.ByteArrayPool;
+import org.jocean.idiom.pool.PooledBytesOutputStream;
 import org.jocean.rosa.api.SignalReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
@@ -59,8 +59,10 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 			.getLogger("SignalTransactionFlow");
 
     public SignalTransactionFlow(
+            final ByteArrayPool pool,
             final HttpStack stack, 
             final SignalConverter signalConverter) {
+        this._bytesStream = new PooledBytesOutputStream(pool);
         this._stack = stack;
         this._converter = signalConverter;
         
@@ -75,6 +77,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
             @Override
             public void afterFlowDestroy(SignalTransactionFlow flow)
                     throws Exception {
+                clearCurrentContent();
                 if ( null != SignalTransactionFlow.this._forceFinishedTimer) {
                     SignalTransactionFlow.this._forceFinishedTimer.detach();
                     SignalTransactionFlow.this._forceFinishedTimer = null;
@@ -85,7 +88,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     
     @Override
     public ArgsHandler getArgsHandler() {
-        return TransportUtils.getSafeRetainArgsHandler();
+        return TransportUtils.guardReferenceCountedArgsHandler();
+    }
+    
+    private void clearCurrentContent() {
+        this._bytesStream.clear();
     }
     
 	public final BizStep WAIT = new BizStep("signal.WAIT")
@@ -164,18 +171,21 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     }
 
     private BizStep delayRetry() {
-        //  delay 1s, and re-try
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("delay {}s and retry fetch signal uri:{}", this._timeoutBeforeRetry / 1000, this._uri);
         }
-        this._scheduleTimer = this.selfExectionLoop().schedule(
-                this.queryInterfaceInstance(Runnable.class), this._timeoutBeforeRetry);
+        
         tryStartForceFinishedTimer();
-        return SCHEDULE;
+        return ((BizStep)this.fireDelayEventAndPush(
+                this.SCHEDULE.makeDelayEvent(
+                    selfInvoker("onScheduled"), 
+                    this._timeoutBeforeRetry)))
+                .freeze();
     }
     
-    @OnEvent(event = "run")
+    @SuppressWarnings("unused")
     private BizStep onScheduled() {
+        clearCurrentContent();
         startObtainHttpClient();
         return OBTAINING;
     }
@@ -185,7 +195,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("fetch response for uri:{} when scheduling and canceled", this._uri);
         }
-        this._scheduleTimer.detach();
+        this.popAndCancelDealyEvents();
         safeDetachHttpHandle();
         return null;
     }
@@ -274,20 +284,23 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 
 	@OnEvent(event = "onHttpContentReceived")
 	private BizStep contentReceived(final HttpContent content) {
-		TransportUtils.readByteBufToBytesList(content.content(), this._bytesList);
+        TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream);
 		return RECVCONTENT;
 	}
 
     @OnEvent(event = "onLastHttpContentReceived")
 	private BizStep lastContentReceived(final LastHttpContent content) throws Exception {
-		TransportUtils.readByteBufToBytesList(content.content(), this._bytesList);
+        TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream);
 		
         safeDetachHttpHandle();
         
-		final InputStream is = new ByteArrayListInputStream(_bytesList);
-		final byte[] totalbytes = new byte[sizeOf(_bytesList)];
+        final Blob blob = this._bytesStream.drainToBlob();
+		final InputStream is = blob.genInputStream();
+		
+		final byte[] totalbytes = new byte[blob.length()];
 		is.read(totalbytes);
 		is.close();
+		blob.release();
 		
         final SignalReactor<Object> reactor = this._signalReactor;
         this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
@@ -330,15 +343,6 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 				HttpHeaders.Values.GZIP);
 		
 		return request;
-	}
-	
-	private static int sizeOf(final List<byte[]> bytesList) {
-		int totalSize = 0;
-		for ( byte[] bytes : bytesList) {
-			totalSize += bytes.length;
-		}
-		
-		return totalSize;
 	}
 	
 	public void notifyReactorFailureIfNeeded() {
@@ -389,10 +393,9 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     private long   _timeoutFromActived = -1;
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
-	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
+    private final PooledBytesOutputStream _bytesStream;
 	private SignalReactor<Object> _signalReactor;
     private HttpClientHandle _handle;
-    private Detachable _scheduleTimer;
     private Detachable _forceFinishedTimer;
     private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
 }

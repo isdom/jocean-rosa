@@ -10,7 +10,12 @@ import java.net.URI;
  *
  */
 public interface HttpBodyPartRepo {
-	public void put(final URI uri, final HttpBodyPart body) throws Exception;
-	public HttpBodyPart get(final URI uri) throws Exception;
+    
+	public void put(final URI uri, final HttpBodyPart body) 
+	        throws Exception;
+	
+	public HttpBodyPart get(final URI uri) 
+	        throws Exception;
+	
 	public void remove(final URI uri) throws Exception;
 }

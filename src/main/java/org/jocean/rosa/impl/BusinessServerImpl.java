@@ -23,6 +23,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
+import org.jocean.idiom.pool.ByteArrayPool;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Visitor2;
@@ -47,15 +48,17 @@ public class BusinessServerImpl implements BusinessServerAgent {
     @Override
 	public SignalTransaction createSignalTransaction() {
 		final SignalTransactionFlow flow = 
-				new SignalTransactionFlow(this._stack, this._converter);
+				new SignalTransactionFlow(this._pool, this._stack, this._converter);
 		this._source.create(flow, flow.WAIT);
 		
 		return flow.queryInterfaceInstance(SignalTransaction.class);
 	}
 
 	public BusinessServerImpl(
+            final ByteArrayPool pool,
 	        final HttpStack httpStack, 
 			final EventReceiverSource source) {
+        this._pool = pool;
 		this._stack = httpStack;
 		this._source = source;
 	}
@@ -65,6 +68,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		return this;
 	}
 	
+    private final ByteArrayPool _pool;
     private final HttpStack _stack;
 	private final EventReceiverSource _source;
 	

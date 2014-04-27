@@ -3,6 +3,8 @@
  */
 package org.jocean.rosa.api;
 
+import org.jocean.idiom.Blob;
+
 /**
  * @author isdom
  *

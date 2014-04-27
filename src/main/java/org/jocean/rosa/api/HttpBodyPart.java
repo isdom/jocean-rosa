@@ -5,25 +5,22 @@ package org.jocean.rosa.api;
 
 import io.netty.handler.codec.http.HttpResponse;
 
-import java.util.Collection;
+import org.jocean.idiom.AbstractReferenceCounted;
+import org.jocean.idiom.Blob;
 
 /**
  * @author isdom
  *
  */
-public class HttpBodyPart {
+public class HttpBodyPart extends AbstractReferenceCounted<HttpBodyPart> {
 	
 	public HttpBodyPart(final HttpResponse response, final Blob blob) {
 		this._response = response;
-		this._blob = blob;
+		this._blob = blob.retain();
 	}
 	
 	public HttpResponse httpResponse() {
 		return this._response;
-	}
-	
-	public Collection<byte[]> parts() {
-		return this._blob.bytesCollection();
 	}
 	
     public Blob blob() {
@@ -33,6 +30,12 @@ public class HttpBodyPart {
 	public int byteCount() {
 		return this._blob.length();
 	}
+	
+	
+    @Override
+    protected void deallocate() {
+        this._blob.release();
+    }
 	
 	private final HttpResponse _response;
 	private final Blob _blob;

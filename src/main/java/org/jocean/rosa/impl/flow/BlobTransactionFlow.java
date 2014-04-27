@@ -13,9 +13,9 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.ArgsHandler;
@@ -24,10 +24,13 @@ import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnEvent;
+import org.jocean.idiom.Blob;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.pool.ByteArrayPool;
+import org.jocean.idiom.pool.PoolUtils;
+import org.jocean.idiom.pool.PooledBytesOutputStream;
 import org.jocean.rosa.api.BlobReactor;
-import org.jocean.rosa.api.DefaultBlob;
 import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.api.TransactionConstants;
@@ -52,8 +55,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 			.getLogger("BlobTransactionFlow");
 
     public BlobTransactionFlow(
+            final ByteArrayPool pool,
             final HttpStack stack, 
             final HttpBodyPartRepo repo) {
+        this._bytesStream = new PooledBytesOutputStream(pool);
         this._stack = stack;
         this._partRepo = repo;
         
@@ -68,6 +73,9 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             @Override
             public void afterFlowDestroy(final BlobTransactionFlow flow)
                     throws Exception {
+                clearCurrentContent();
+                safeReleaseBodyPart();
+                
                 if ( null != BlobTransactionFlow.this._forceFinishedTimer) {
                     BlobTransactionFlow.this._forceFinishedTimer.detach();
                     BlobTransactionFlow.this._forceFinishedTimer = null;
@@ -78,7 +86,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
     @Override
     public ArgsHandler getArgsHandler() {
-        return TransportUtils.getSafeRetainArgsHandler();
+        return TransportUtils.guardReferenceCountedArgsHandler();
     }
     
 	public final BizStep WAIT = new BizStep("blob.WAIT")
@@ -187,11 +195,8 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     }
     
     
-    /**
-     * 
-     */
     private void clearCurrentContent() {
-        this._bytesList.clear();
+        this._bytesStream.clear();
     }
 
     @OnEvent(event = "start")
@@ -224,7 +229,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
 		}
-		final HttpRequest request = genHttpRequest(this._uri, this._part);
+		final HttpRequest request = genHttpRequest(this._uri, this._bodyPart);
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("send http request {}", request);
 		}
@@ -291,12 +296,27 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		
 		notifyContentType(response.headers().get(HttpHeaders.Names.CONTENT_TYPE));
 		
-		if ( null != this._part ) {
+		if ( null != this._bodyPart ) {
 			// check if content range
 			final String contentRange = response.headers().get(HttpHeaders.Names.CONTENT_RANGE);
 			if ( null != contentRange ) {
 				// assume Partial
-				this._bytesList.addAll(this._part.parts());
+			    final InputStream is = this._bodyPart.blob().genInputStream();
+			    
+			    try {
+			        PoolUtils.inputStream2OutputStream(is, this._bytesStream);
+			    }
+			    catch (Exception e) {
+			        LOG.warn("exception when inputStream2OutputStream, derail:{}", 
+			                ExceptionUtils.exception2detail(e));
+			    }
+			    finally {
+			        try {
+                        is.close();
+                    } catch (IOException e) {
+                    }
+			    }
+				
 				LOG.info("uri {}, recv partial get response, detail: {}", this._uri, contentRange);
 				
 				// 考虑 Content-Range 的情况
@@ -343,14 +363,14 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     @OnEvent(event = "onHttpContentReceived")
 	private BizStep contentReceived(final HttpContent content) {
 		updateAndNotifyCurrentProgress(
-			TransportUtils.readByteBufToBytesList(content.content(), this._bytesList));
+			TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream));
 		return RECVCONTENT;
 	}
 
 	@OnEvent(event = "onLastHttpContentReceived")
 	private BizStep lastContentReceived(final LastHttpContent content) throws Exception {
 		updateAndNotifyCurrentProgress(
-			TransportUtils.readByteBufToBytesList(content.content(), this._bytesList));
+			TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream));
 		
         safeDetachHttpHandle();
 
@@ -361,7 +381,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         
         if ( null != reactor) {
             try {
-                reactor.onBlobReceived(new DefaultBlob( this._bytesList ));
+                reactor.onBlobReceived(this._bytesStream.drainToBlob());
                 if ( LOG.isTraceEnabled() ) {
                     LOG.trace("blobTransaction invoke onBlobReceived succeed. uri:({})", this._uri);
                 }
@@ -375,9 +395,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		return null;
 	}
 
-    /**
-     * 
-     */
     private void safeRemovePartFromRepo() {
         if ( null != this._partRepo ) {
             try {
@@ -431,12 +448,20 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
 	private void saveHttpBodyPart() {
 		if ( null != this._partRepo) {
+            final Blob blob = this._bytesStream.drainToBlob();
 			try {
-                this._partRepo.put(this._uri, new HttpBodyPart(this._response, new DefaultBlob(this._bytesList)));
+			    if ( null != blob ) {
+			        this._partRepo.put(this._uri, new HttpBodyPart(this._response, blob));
+			    }
             } catch (Exception e) {
                 LOG.warn("exception when _partRepo.put for uri:{}, detail:{}", 
                         this._uri, ExceptionUtils.exception2detail(e));
             }
+			finally {
+			    if ( null != blob ) {
+			        blob.release();
+			    }
+			}
 		}
 	}
 	
@@ -497,18 +522,17 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	}
 
     private void updatePartAndStartObtainHttpClient() {
+        safeReleaseBodyPart();
+        
         if ( null != this._partRepo ) {
             try {
-                this._part = this._partRepo.get(this._uri);
+                this._bodyPart = this._partRepo.get(this._uri);
             } catch (Exception e) {
                 LOG.warn("exception when _partRepo.get for uri:{}, detail:{}", 
                         this._uri, ExceptionUtils.exception2detail(e));
-                this._part = null;
             }
         }
-        else {
-            this._part = null;
-        }
+        
         this._handle = this._stack.createHttpClientHandle();
         final HttpClientHandle currentHandle = this._handle;
         
@@ -577,6 +601,17 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
                         }
                     }});
     }
+
+    /**
+     * 
+     */
+    private void safeReleaseBodyPart() {
+        if ( null != this._bodyPart ) {
+            // release previous
+            this._bodyPart.release();
+            this._bodyPart = null;
+        }
+    }
     
     private void safeDetachHttpHandle() {
         if ( null != this._handle ) {
@@ -604,13 +639,13 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
 	private volatile HttpClientHandle _handle;
-	private HttpBodyPart _part;
+	private HttpBodyPart _bodyPart = null;
 	private HttpResponse _response;
 	private long _totalLength = -1;
 	private long _currentPos = -1;
     private Detachable _forceFinishedTimer;
     private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
 	
-	private final List<byte[]> _bytesList = new ArrayList<byte[]>();
+	private final PooledBytesOutputStream _bytesStream;
 	private BlobReactor _blobReactor;
 }
