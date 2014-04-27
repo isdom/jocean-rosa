@@ -301,35 +301,31 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
             final Blob blob = this._bytesStream.drainToBlob();
             final InputStream is = blob.genInputStream();
             
-            if ( LOG.isDebugEnabled() ) {
+            blob.release();
+            
+            if ( LOG.isTraceEnabled() ) {
                 is.mark(0);
                 printLongText(is, 80, blob.length());
                 is.reset();
             }
 
-            blob.release();
-
             final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
             boolean feedbackResponse = false;
 			try {
-	            reader.startObject();
-	            if (reader.hasNext()) {
-	                final Object resp = reader.readObject(this._respCls);
-	                if ( null != resp ) {
-	                    try {
-                            feedbackResponse = true;
-    	                    reactor.onResponseReceived(resp);
-    	                    if ( LOG.isTraceEnabled() ) {
-    	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
-    	                    }
+                final Object resp = reader.readObject(this._respCls);
+                if ( null != resp ) {
+                    try {
+                        feedbackResponse = true;
+	                    reactor.onResponseReceived(resp);
+	                    if ( LOG.isTraceEnabled() ) {
+	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
 	                    }
-	                    catch (Exception e) {
-	                        LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
-	                                this._uri, ExceptionUtils.exception2detail(e));
-	                    }
-	                }
-	            }
-                reader.endObject();
+                    }
+                    catch (Exception e) {
+                        LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
+                                this._uri, ExceptionUtils.exception2detail(e));
+                    }
+                }
 			}
 			catch (Exception e) {
 				LOG.warn("exception when prepare response for uri:{}, detail:{}", 
@@ -356,7 +352,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     		int pos = 0;
     		while ( pos < text.length() ) {
     			final int len = Math.min( text.length() - pos, size );
-    			LOG.debug( "{}", text.substring(pos, pos + len) );
+    			LOG.trace( "{}", text.substring(pos, pos + len) );
     			pos += size;
     		}
         }
