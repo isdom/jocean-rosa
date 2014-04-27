@@ -528,7 +528,12 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         
         if ( null != this._partRepo ) {
             try {
-                this._bodyPart = this._partRepo.get(this._uri);
+                final HttpBodyPart part = this._partRepo.get(this._uri);
+                if ( null != part ) {
+                    //  使用 tryReatin 尝试 ref+1 并保存part
+                    //  如果 tryRetain 返回null，表明已经被 release 到0，内部数据已经被清理
+                    this._bodyPart = part.tryRetain();
+                }
             } catch (Exception e) {
                 LOG.warn("exception when _partRepo.get for uri:{}, detail:{}", 
                         this._uri, ExceptionUtils.exception2detail(e));
