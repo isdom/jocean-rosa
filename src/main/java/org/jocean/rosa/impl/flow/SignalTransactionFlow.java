@@ -13,6 +13,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.handler.codec.http.LastHttpContent;
 
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.URI;
 
 import org.jocean.event.api.AbstractFlow;
@@ -38,7 +39,7 @@ import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONReader;
 
 /**
  * @author isdom
@@ -293,37 +294,49 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream);
 		
         safeDetachHttpHandle();
-        
-        final Blob blob = this._bytesStream.drainToBlob();
-		final InputStream is = blob.genInputStream();
-		
-		final byte[] totalbytes = new byte[blob.length()];
-		is.read(totalbytes);
-		is.close();
-		blob.release();
 		
         final SignalReactor<Object> reactor = this._signalReactor;
         this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
         
         if ( null != reactor) {
-			if ( LOG.isTraceEnabled() ) {
-				printLongText(new String(totalbytes), 80);
-			}
+//			if ( LOG.isTraceEnabled() ) {
+//				printLongText(new String(totalbytes), 80);
+//			}
+            final Blob blob = this._bytesStream.drainToBlob();
+            final InputStream is = blob.genInputStream();
+            blob.release();
+            
+            final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
+            
 			try {
-                reactor.onResponseReceived(JSON.parseObject(totalbytes, this._respCls));
-                if ( LOG.isTraceEnabled() ) {
-                    LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
-                }
+	            reader.startObject();
+	            if (reader.hasNext()) {
+	                reactor.onResponseReceived(reader.readObject(this._respCls));
+	                if ( LOG.isTraceEnabled() ) {
+	                    LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
+	                }
+	            }
+	            else {
+	                // ensure notify onTransactionFailure with FAILURE_NOCONTENT
+	                this._signalReactor = reactor;
+	                setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
+	            }
+                reader.endObject();
 			}
 			catch (Exception e) {
 				LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
 						this._uri, ExceptionUtils.exception2detail(e));
 			}
+			finally {
+                reader.close();
+			}
 		}
+        
 		return null;
 	}
 
-	private void printLongText(final String text, final int size) {
+	@SuppressWarnings("unused")
+    private void printLongText(final String text, final int size) {
 		int pos = 0;
 		while ( pos < text.length() ) {
 			final int len = Math.min( text.length() - pos, size );
