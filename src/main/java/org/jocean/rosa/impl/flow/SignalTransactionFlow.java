@@ -121,7 +121,6 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 			.freeze();
 
     private final BizStep SCHEDULE = new BizStep("signal.SCHEDULE")
-            .handler(selfInvoker("onScheduled"))
             .handler(selfInvoker("schedulingOnDetach"))
             .freeze();
     
