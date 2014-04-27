@@ -299,13 +299,17 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
         
         if ( null != reactor) {
-//			if ( LOG.isTraceEnabled() ) {
-//				printLongText(new String(totalbytes), 80);
-//			}
             final Blob blob = this._bytesStream.drainToBlob();
             final InputStream is = blob.genInputStream();
-            blob.release();
             
+            if ( LOG.isDebugEnabled() ) {
+                is.mark(0);
+                printLongText(is, 80, blob.length());
+                is.reset();
+            }
+
+            blob.release();
+
             final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
             
 			try {
@@ -335,14 +339,22 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 		return null;
 	}
 
-	@SuppressWarnings("unused")
-    private void printLongText(final String text, final int size) {
-		int pos = 0;
-		while ( pos < text.length() ) {
-			final int len = Math.min( text.length() - pos, size );
-			LOG.trace( "{}", text.substring(pos, pos + len) );
-			pos += size;
-		}
+    private void printLongText(final InputStream is, final int size, final int totalSize) {
+        try {
+            final byte[] bytes = new byte[totalSize];
+            is.read(bytes);
+            final String text = new String(bytes, "UTF-8");
+    		int pos = 0;
+    		while ( pos < text.length() ) {
+    			final int len = Math.min( text.length() - pos, size );
+    			LOG.debug( "{}", text.substring(pos, pos + len) );
+    			pos += size;
+    		}
+        }
+        catch (Exception e) {
+            LOG.warn("exception when printLongText, detail:{}", 
+                    ExceptionUtils.exception2detail(e));
+        }
 	}
 	
 	private static HttpRequest genHttpRequest(final URI uri) {
