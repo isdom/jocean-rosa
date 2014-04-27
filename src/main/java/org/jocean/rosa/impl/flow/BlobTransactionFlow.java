@@ -380,15 +380,26 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         this._blobReactor = null;   // clear _blobReactor 字段，这样 onTransactionFailure 不会再被触发
         
         if ( null != reactor) {
-            try {
-                reactor.onBlobReceived(this._bytesStream.drainToBlob());
-                if ( LOG.isTraceEnabled() ) {
-                    LOG.trace("blobTransaction invoke onBlobReceived succeed. uri:({})", this._uri);
+            final Blob blob = this._bytesStream.drainToBlob();
+            if ( null != blob ) {
+                try {
+                    reactor.onBlobReceived(blob);
+                    if ( LOG.isTraceEnabled() ) {
+                        LOG.trace("blobTransaction invoke onBlobReceived succeed. uri:({})", this._uri);
+                    }
+                }
+                catch (Exception e) {
+                    LOG.warn("exception when BlobReactor.onBlobReceived for uri:{}, detail:{}", 
+                            this._uri, ExceptionUtils.exception2detail(e));
+                }
+                finally {
+                    blob.release();
                 }
             }
-            catch (Exception e) {
-                LOG.warn("exception when BlobReactor.onBlobReceived for uri:{}, detail:{}", 
-                        this._uri, ExceptionUtils.exception2detail(e));
+            else {
+                // ensure notify onTransactionFailure with FAILURE_NOCONTENT
+                this._blobReactor = reactor;
+                setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
             }
         }
         
