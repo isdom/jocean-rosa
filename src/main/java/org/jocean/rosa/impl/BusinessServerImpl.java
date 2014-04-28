@@ -23,10 +23,10 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
-import org.jocean.idiom.pool.ByteArrayPool;
 import org.jocean.idiom.ReflectUtils;
 import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Visitor2;
+import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
@@ -55,7 +55,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 	}
 
 	public BusinessServerImpl(
-            final ByteArrayPool pool,
+            final BytesPool pool,
 	        final HttpStack httpStack, 
 			final EventReceiverSource source) {
         this._pool = pool;
@@ -68,7 +68,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		return this;
 	}
 	
-    private final ByteArrayPool _pool;
+    private final BytesPool _pool;
     private final HttpStack _stack;
 	private final EventReceiverSource _source;
 	

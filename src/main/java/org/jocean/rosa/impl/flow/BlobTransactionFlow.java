@@ -27,7 +27,7 @@ import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.idiom.Blob;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.pool.ByteArrayPool;
+import org.jocean.idiom.pool.BytesPool;
 import org.jocean.idiom.pool.PoolUtils;
 import org.jocean.idiom.pool.PooledBytesOutputStream;
 import org.jocean.rosa.api.BlobReactor;
@@ -55,7 +55,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 			.getLogger("BlobTransactionFlow");
 
     public BlobTransactionFlow(
-            final ByteArrayPool pool,
+            final BytesPool pool,
             final HttpStack stack, 
             final HttpBodyPartRepo repo) {
         this._bytesStream = new PooledBytesOutputStream(pool);

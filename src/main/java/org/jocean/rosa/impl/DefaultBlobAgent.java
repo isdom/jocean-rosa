@@ -4,7 +4,7 @@
 package org.jocean.rosa.impl;
 
 import org.jocean.event.api.EventReceiverSource;
-import org.jocean.idiom.pool.ByteArrayPool;
+import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BlobAgent;
 import org.jocean.rosa.api.BlobTransaction;
 import org.jocean.rosa.api.HttpBodyPartRepo;
@@ -33,7 +33,7 @@ public class DefaultBlobAgent implements BlobAgent {
     }
 
 	public DefaultBlobAgent(
-	        final ByteArrayPool pool,
+	        final BytesPool pool,
 	        final HttpStack httpStack, 
 			final EventReceiverSource source, 
 			final HttpBodyPartRepo repo) {
@@ -43,7 +43,7 @@ public class DefaultBlobAgent implements BlobAgent {
 		this._partRepo = repo;
 	}
 	
-	private final ByteArrayPool _pool;
+	private final BytesPool _pool;
 	private final HttpStack _stack;
 	private final EventReceiverSource _source;
 	private final HttpBodyPartRepo _partRepo;
