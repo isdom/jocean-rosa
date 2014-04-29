@@ -27,9 +27,9 @@ import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.idiom.Blob;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.block.BlockUtils;
+import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
-import org.jocean.idiom.pool.PoolUtils;
-import org.jocean.idiom.pool.PooledBytesOutputStream;
 import org.jocean.rosa.api.BlobReactor;
 import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
@@ -304,7 +304,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 			    final InputStream is = this._bodyPart.blob().genInputStream();
 			    
 			    try {
-			        PoolUtils.inputStream2OutputStream(is, this._bytesStream);
+			        BlockUtils.inputStream2OutputStream(is, this._bytesStream);
 			    }
 			    catch (Exception e) {
 			        LOG.warn("exception when inputStream2OutputStream, derail:{}", 
