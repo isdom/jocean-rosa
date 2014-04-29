@@ -6,7 +6,7 @@ package org.jocean.rosa.api;
 import io.netty.handler.codec.http.HttpResponse;
 
 import org.jocean.idiom.AbstractReferenceCounted;
-import org.jocean.idiom.Blob;
+import org.jocean.idiom.block.Blob;
 
 /**
  * @author isdom
