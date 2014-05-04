@@ -41,7 +41,7 @@
     <dependencies>
     
         <dependency org="javax.ws.rs" name="javax.ws.rs-api" rev="2.0"
-            conf="compile->default(*)"/>
+            conf="compile->default(*)" />
         
 		<dependency org="org.slf4j" name="slf4j-api" rev="1.7.6" 
             conf="compile->default(*)"/>
