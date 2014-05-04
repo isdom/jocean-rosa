@@ -52,7 +52,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     implements ArgsHandlerSource {
 
 	private static final Logger LOG = LoggerFactory
-			.getLogger("BlobTransactionFlow");
+			.getLogger(BlobTransactionFlow.class);
 
     public BlobTransactionFlow(
             final BytesPool pool,

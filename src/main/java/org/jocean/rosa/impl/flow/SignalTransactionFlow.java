@@ -39,6 +39,7 @@ import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONReader;
 
 /**
@@ -57,7 +58,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     }
 
 	private static final Logger LOG = LoggerFactory
-			.getLogger("SignalTransactionFlow");
+			.getLogger(SignalTransactionFlow.class);
 
     public SignalTransactionFlow(
             final BytesPool pool,
@@ -309,10 +310,14 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                 is.reset();
             }
 
-            final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
+            // final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
             boolean feedbackResponse = false;
 			try {
-                final Object resp = reader.readObject(this._respCls);
+	            final byte[] bytes = new byte[is.available()];
+	            final int readed = is.read(bytes);
+	            final Object resp = JSON.parseObject(bytes,this._respCls);
+	            
+//                final Object resp = reader.readObject(this._respCls);
                 if ( null != resp ) {
                     try {
                         feedbackResponse = true;
@@ -337,7 +342,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                     this._signalReactor = reactor;
                     setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
                 }
-                reader.close();
+//                reader.close();
 			}
 		}
         
