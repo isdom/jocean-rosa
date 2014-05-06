@@ -343,6 +343,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                     setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
                 }
 //                reader.close();
+                is.close();
 			}
 		}
         
