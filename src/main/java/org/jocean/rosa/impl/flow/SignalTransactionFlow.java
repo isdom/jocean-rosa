@@ -52,7 +52,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         public URI req2uri(final Object request);
         
         public HttpRequest processHttpRequest(final Object request, 
-                final HttpRequest httpRequest);
+                final DefaultFullHttpRequest httpRequest);
     }
 
 	private static final Logger LOG = LoggerFactory
@@ -366,11 +366,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         }
 	}
 	
-	private static HttpRequest genHttpRequest(final URI uri) {
+	private static DefaultFullHttpRequest genHttpRequest(final URI uri) {
 		// Prepare the HTTP request.
 		final String host = uri.getHost() == null ? "localhost" : uri.getHost();
 
-		final HttpRequest request = new DefaultFullHttpRequest(
+		final DefaultFullHttpRequest request = new DefaultFullHttpRequest(
 				HttpVersion.HTTP_1_1, HttpMethod.GET, uri.getRawPath());
 		request.headers().set(HttpHeaders.Names.HOST, host);
 		request.headers().set(HttpHeaders.Names.ACCEPT_ENCODING,

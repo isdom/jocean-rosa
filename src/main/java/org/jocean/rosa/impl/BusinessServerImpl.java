@@ -3,6 +3,9 @@
  */
 package org.jocean.rosa.impl;
 
+import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 
 import java.lang.annotation.Annotation;
@@ -14,11 +17,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.event.api.EventReceiverSource;
+import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
 import org.jocean.idiom.PropertyPlaceholderHelper;
@@ -34,6 +40,8 @@ import org.jocean.rosa.impl.flow.SignalTransactionFlow.SignalConverter;
 import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.alibaba.fastjson.JSON;
 
 /**
  * @author isdom
@@ -68,6 +76,20 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		return this;
 	}
 	
+    /**
+     * @param request
+     */
+    private Class<?> getHttpMethod(final Object request) {
+        final AnnotationWrapper wrapper = 
+                request.getClass().getAnnotation(AnnotationWrapper.class);
+        if ( null != wrapper ) {
+            return wrapper.value();
+        }
+        else {
+            return null;
+        }
+    }
+
     private final BytesPool _pool;
     private final HttpStack _stack;
 	private final EventReceiverSource _source;
@@ -95,7 +117,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
         @Override
         public HttpRequest processHttpRequest(
                 final Object request, 
-                final HttpRequest httpRequest) {
+                final DefaultFullHttpRequest httpRequest) {
             try {
                 _processorCache.get(request.getClass())
                     .visit(request, httpRequest);
@@ -117,7 +139,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
                 }});
 	
 	private final class RequestProcessor 
-	    implements Function<Object, String>, Visitor2<Object, HttpRequest> {
+	    implements Function<Object, String>, Visitor2<Object, DefaultFullHttpRequest> {
 
 	    RequestProcessor(final Class<?> reqCls) {
             this._queryFields = ReflectUtils.getAnnotationFieldsOf(reqCls, QueryParam.class);
@@ -152,8 +174,31 @@ public class BusinessServerImpl implements BusinessServerAgent {
         }
 	    
         @Override
-        public void visit(final Object request, final HttpRequest httpRequest) 
+        public void visit(final Object request, final DefaultFullHttpRequest httpRequest) 
                 throws Exception {
+            final Class<?> httpMethod = getHttpMethod(request);
+            if ( null == httpMethod 
+                || GET.class.equals(httpMethod)) {
+                genGetRequest(request, httpRequest);
+            }
+            else if (POST.class.equals(httpMethod)) {
+                genPostRequest(request, httpRequest);
+            }
+        }
+        
+        private void genPostRequest(
+                final Object request,
+                final DefaultFullHttpRequest httpRequest) {
+            final byte[] jsonBytes = JSON.toJSONBytes(request);
+            httpRequest.setMethod(HttpMethod.POST);
+            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
+            httpRequest.content().writeBytes(jsonBytes);
+            HttpHeaders.setContentLength(httpRequest, jsonBytes.length);
+        }
+
+        private void genGetRequest(
+                final Object request, 
+                final DefaultFullHttpRequest httpRequest) {
             if ( null != this._queryFields ) {
                 final StringBuilder sb = new StringBuilder();
                 char link = '?';
@@ -183,6 +228,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
                 }
             }
         }
+        
 	    
         private final Field[] _queryFields;
         
