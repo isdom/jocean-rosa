@@ -3,11 +3,14 @@
  */
 package org.jocean.rosa.impl;
 
+import io.netty.buffer.ByteBufOutputStream;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -42,6 +45,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson.JSON;
+import com.jcraft.jzlib.Deflater;
+import com.jcraft.jzlib.DeflaterOutputStream;
+import com.jcraft.jzlib.JZlib;
 
 /**
  * @author isdom
@@ -190,10 +196,31 @@ public class BusinessServerImpl implements BusinessServerAgent {
                 final Object request,
                 final DefaultFullHttpRequest httpRequest) {
             final byte[] jsonBytes = JSON.toJSONBytes(request);
+            final OutputStream os = new ByteBufOutputStream(httpRequest.content());
+            DeflaterOutputStream zos = null;
+            
+            try {
+                zos = new DeflaterOutputStream(os, new Deflater(JZlib.Z_BEST_COMPRESSION));
+                zos.write(jsonBytes);
+                zos.finish();
+                HttpHeaders.setContentLength(httpRequest, zos.getTotalOut());
+            }
+            catch (Throwable e) {
+                LOG.warn("exception when compress json, detail:{}", 
+                        ExceptionUtils.exception2detail(e));
+            }
+            finally {
+                if ( null != zos ) {
+                    try {
+                        zos.close();
+                    } catch (Exception e) {
+                    }
+                }
+            }
+            
             httpRequest.setMethod(HttpMethod.POST);
-            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
-            httpRequest.content().writeBytes(jsonBytes);
-            HttpHeaders.setContentLength(httpRequest, jsonBytes.length);
+            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/cjson");
+//            httpRequest.content().writeBytes(jsonBytes);
         }
 
         private void genGetRequest(
