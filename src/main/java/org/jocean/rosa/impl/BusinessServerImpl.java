@@ -9,7 +9,6 @@ import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 
-import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -30,6 +29,7 @@ import org.jocean.event.api.EventReceiverSource;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
+import org.jocean.idiom.Pair;
 import org.jocean.idiom.PropertyPlaceholderHelper;
 import org.jocean.idiom.PropertyPlaceholderHelper.PlaceholderResolver;
 import org.jocean.idiom.ReflectUtils;
@@ -37,6 +37,7 @@ import org.jocean.idiom.SimpleCache;
 import org.jocean.idiom.Visitor2;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BusinessServerAgent;
+import org.jocean.rosa.api.RequestFeature;
 import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow.SignalConverter;
@@ -77,8 +78,9 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		this._source = source;
 	}
 	
-	public BusinessServerImpl registerRequestType(final Class<?> reqCls, final String pathPrefix) {
-		this._req2pathPrefix.put(reqCls, pathPrefix);
+	public BusinessServerImpl registerRequestType(final Class<?> reqCls, final String pathPrefix, 
+	        final RequestFeature ... features) {
+		this._req2pathPrefix.put(reqCls, Pair.of(pathPrefix, RequestFeature.features2int(features)) );
 		return this;
 	}
 	
@@ -100,8 +102,8 @@ public class BusinessServerImpl implements BusinessServerAgent {
     private final HttpStack _stack;
 	private final EventReceiverSource _source;
 	
-	private final Map<Class<?>, String> _req2pathPrefix = 
-	        new ConcurrentHashMap<Class<?>, String>();
+	private final Map<Class<?>, Pair<String, Integer>> _req2pathPrefix = 
+	        new ConcurrentHashMap<Class<?>, Pair<String, Integer>>();
 	
     private final SignalConverter _converter = new SignalConverter() {
 
@@ -160,7 +162,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 
         @Override
         public String apply(final Object request) {
-            final String pathPrefix = _req2pathPrefix.get(request.getClass());
+            final String pathPrefix = _req2pathPrefix.get(request.getClass()).first;
             if ( null == pathPrefix && null == this._pathSuffix ) {
                 // class not registered, return null
                 return null;
@@ -182,20 +184,41 @@ public class BusinessServerImpl implements BusinessServerAgent {
         @Override
         public void visit(final Object request, final DefaultFullHttpRequest httpRequest) 
                 throws Exception {
+            final int features = _req2pathPrefix.get(request.getClass()).second;
             final Class<?> httpMethod = getHttpMethod(request);
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
                 genGetRequest(request, httpRequest);
             }
             else if (POST.class.equals(httpMethod)) {
-                genPostRequest(request, httpRequest);
+                genPostRequest(request, httpRequest, features);
             }
         }
         
         private void genPostRequest(
                 final Object request,
-                final DefaultFullHttpRequest httpRequest) {
+                final DefaultFullHttpRequest httpRequest,
+                final int features) {
             final byte[] jsonBytes = JSON.toJSONBytes(request);
+            
+            if ( RequestFeature.isEnabled(features, RequestFeature.EnableJsonCompress)) {
+                genContentAsCJSON(httpRequest, jsonBytes);
+            }
+            else {
+                genContentAsJSON(httpRequest, jsonBytes);
+            }
+            
+            httpRequest.setMethod(HttpMethod.POST);
+//            httpRequest.content().writeBytes(jsonBytes);
+        }
+
+        /**
+         * @param httpRequest
+         * @param jsonBytes
+         */
+        private void genContentAsCJSON(
+                final DefaultFullHttpRequest httpRequest,
+                final byte[] jsonBytes) {
             final OutputStream os = new ByteBufOutputStream(httpRequest.content());
             DeflaterOutputStream zos = null;
             
@@ -217,10 +240,30 @@ public class BusinessServerImpl implements BusinessServerAgent {
                     }
                 }
             }
-            
-            httpRequest.setMethod(HttpMethod.POST);
             httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/cjson");
-//            httpRequest.content().writeBytes(jsonBytes);
+        }
+
+        private void genContentAsJSON(
+                final DefaultFullHttpRequest httpRequest,
+                final byte[] jsonBytes) {
+            final OutputStream os = new ByteBufOutputStream(httpRequest.content());
+            try {
+                os.write(jsonBytes);
+                HttpHeaders.setContentLength(httpRequest, jsonBytes.length);
+            }
+            catch (Throwable e) {
+                LOG.warn("exception when write json to response, detail:{}", 
+                        ExceptionUtils.exception2detail(e));
+            }
+            finally {
+                if ( null != os ) {
+                    try {
+                        os.close();
+                    } catch (Exception e) {
+                    }
+                }
+            }
+            httpRequest.headers().set(HttpHeaders.Names.CONTENT_TYPE, "application/json");
         }
 
         private void genGetRequest(
