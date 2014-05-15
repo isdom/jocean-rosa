@@ -6,7 +6,6 @@ package org.jocean.rosa.impl;
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BlobAgent;
-import org.jocean.rosa.api.BlobTransaction;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.impl.flow.BlobTransactionFlow;
 import org.jocean.transportclient.http.HttpStack;

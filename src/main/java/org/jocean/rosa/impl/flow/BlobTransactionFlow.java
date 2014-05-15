@@ -30,7 +30,7 @@ import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
-import org.jocean.rosa.api.BlobReactor;
+import org.jocean.rosa.api.BlobAgent.BlobReactor;
 import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.api.TransactionConstants;
@@ -202,9 +202,11 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     @OnEvent(event = "start")
 	private BizStep onTransactionStart(
 	        final URI uri,
-	        final BlobReactor reactor, 
+	        final Object ctx,
+	        final BlobReactor<Object> reactor, 
 	        final TransactionPolicy policy) {
         this._uri = uri;
+        this._ctx = ctx;
         this._blobReactor = reactor;
         
         if ( null != policy ) {
@@ -222,7 +224,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private BizStep onHttpObtained(final HttpClient httpclient) {
 		if ( null != this._blobReactor ) {
 			try {
-				this._blobReactor.onTransportActived();
+				this._blobReactor.onTransportActived(this._ctx);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when BlobReactor.onTransportActived for uri:{}, detail:{}", 
@@ -351,7 +353,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private void notifyContentType(final String contentType) {
         if ( null != this._blobReactor ) {
             try {
-                this._blobReactor.onContentTypeReceived(contentType);
+                this._blobReactor.onContentTypeReceived(this._ctx, contentType);
             }
             catch (Exception e) {
                 LOG.warn("exception when BlobReactor.onContentTypeReceived for uri:{} contentType:{}, detail:{}", 
@@ -376,14 +378,14 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
         safeRemovePartFromRepo();
         
-        final BlobReactor reactor = this._blobReactor;
+        final BlobReactor<Object> reactor = this._blobReactor;
         this._blobReactor = null;   // clear _blobReactor 字段，这样 onTransactionFailure 不会再被触发
         
         if ( null != reactor) {
             final Blob blob = this._bytesStream.drainToBlob();
             if ( null != blob ) {
                 try {
-                    reactor.onBlobReceived(blob);
+                    reactor.onBlobReceived(this._ctx, blob);
                     if ( LOG.isTraceEnabled() ) {
                         LOG.trace("blobTransaction invoke onBlobReceived succeed. uri:({})", this._uri);
                     }
@@ -448,7 +450,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private void notifyCurrentProgress() {
 		if ( null != this._blobReactor ) {
 			try {
-				this._blobReactor.onProgress(this._currentPos, this._totalLength);
+				this._blobReactor.onProgress(this._ctx, this._currentPos, this._totalLength);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when imageReactor.onProgress for uri:{} progress{}/{}, detail:{}", 
@@ -510,7 +512,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private void notifyReactorFailureIfNeeded() {
 		if ( null != this._blobReactor ) {
 			try {
-				this._blobReactor.onTransactionFailure(this._failureReason);
+				this._blobReactor.onTransactionFailure(this._ctx, this._failureReason);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when BlobReactor.onTransactionFailure for uri:{}, detail:{}", 
@@ -525,7 +527,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private void notifyReactorTransportInactived() {
 		if ( null != this._blobReactor ) {
 			try {
-				this._blobReactor.onTransportInactived();
+				this._blobReactor.onTransportInactived(this._ctx);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when imageReactor.onTransportInactived for uri:{}, detail:{}", 
@@ -665,5 +667,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
 	
 	private final PooledBytesOutputStream _bytesStream;
-	private BlobReactor _blobReactor;
+	private BlobReactor<Object> _blobReactor;
+	private Object _ctx;
 }

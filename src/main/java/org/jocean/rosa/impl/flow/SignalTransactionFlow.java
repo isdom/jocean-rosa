@@ -27,7 +27,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
-import org.jocean.rosa.api.SignalReactor;
+import org.jocean.rosa.api.BusinessServerAgent.SignalReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
 import org.jocean.transportclient.TransportUtils;
@@ -202,10 +202,12 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	@OnEvent(event = "start")
 	private BizStep onSignalTransactionStart(
 	        final Object request, 
+	        final Object ctx,
 	        final Class<?> respCls,
-	        final SignalReactor<Object> reactor, 
+	        final SignalReactor<Object, Object> reactor, 
 	        final TransactionPolicy policy) {
 	    this._request = request;
+	    this._ctx = ctx;
 		this._signalReactor = reactor;
 		this._respCls = respCls;
 		this._uri = this._converter.req2uri(request);
@@ -293,7 +295,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 		
         safeDetachHttpHandle();
 		
-        final SignalReactor<Object> reactor = this._signalReactor;
+        final SignalReactor<Object, Object> reactor = this._signalReactor;
         this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
         
         if ( null != reactor) {
@@ -319,7 +321,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                 if ( null != resp ) {
                     try {
                         feedbackResponse = true;
-	                    reactor.onResponseReceived(resp);
+	                    reactor.onResponseReceived(this._ctx, resp);
 	                    if ( LOG.isTraceEnabled() ) {
 	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
 	                    }
@@ -382,7 +384,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	public void notifyReactorFailureIfNeeded() {
 		if ( null != this._signalReactor ) {
 			try {
-				this._signalReactor.onTransactionFailure(this._failureReason);
+				this._signalReactor.onTransactionFailure(this._ctx, this._failureReason);
 			}
 			catch (Exception e) {
 				LOG.warn("exception when SignalReactor.onTransactionFailure for uri:{}, detail:{}", 
@@ -428,7 +430,8 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
     private final PooledBytesOutputStream _bytesStream;
-	private SignalReactor<Object> _signalReactor;
+    private Object  _ctx;
+	private SignalReactor<Object, Object> _signalReactor;
     private HttpClientHandle _handle;
     private Detachable _forceFinishedTimer;
     private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;

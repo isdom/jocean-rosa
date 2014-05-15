@@ -38,7 +38,6 @@ import org.jocean.idiom.Visitor2;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.RequestFeature;
-import org.jocean.rosa.api.SignalTransaction;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow.SignalConverter;
 import org.jocean.transportclient.http.HttpStack;
