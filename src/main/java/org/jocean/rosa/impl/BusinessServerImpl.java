@@ -161,7 +161,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 
         @Override
         public String apply(final Object request) {
-            final String pathPrefix = _req2pathPrefix.get(request.getClass()).first;
+            final String pathPrefix = safeGetPathPrefix(request);
             if ( null == pathPrefix && null == this._pathSuffix ) {
                 // class not registered, return null
                 return null;
@@ -179,11 +179,20 @@ public class BusinessServerImpl implements BusinessServerAgent {
                 return fullPath;
             }
         }
+
+        /**
+         * @param request
+         * @return
+         */
+        private String safeGetPathPrefix(final Object request) {
+            final Pair<String, Integer> pair = _req2pathPrefix.get(request.getClass());
+            return (null != pair ? pair.first : null);
+        }
 	    
         @Override
         public void visit(final Object request, final DefaultFullHttpRequest httpRequest) 
                 throws Exception {
-            final int features = _req2pathPrefix.get(request.getClass()).second;
+            final int features = safeGetRequestFeatures(request);
             final Class<?> httpMethod = getHttpMethod(request);
             if ( null == httpMethod 
                 || GET.class.equals(httpMethod)) {
@@ -192,6 +201,15 @@ public class BusinessServerImpl implements BusinessServerAgent {
             else if (POST.class.equals(httpMethod)) {
                 genPostRequest(request, httpRequest, features);
             }
+        }
+
+        /**
+         * @param request
+         * @return
+         */
+        private int safeGetRequestFeatures(final Object request) {
+            final Pair<String, Integer> pair = _req2pathPrefix.get(request.getClass());
+            return (null != pair ? pair.second : 0);
         }
         
         private void genPostRequest(
