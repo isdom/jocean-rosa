@@ -4,13 +4,11 @@
 package org.jocean.rosa.impl.flow;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.LastHttpContent;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -25,12 +23,12 @@ import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
+import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BusinessServerAgent.SignalReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
-import org.jocean.transportclient.TransportUtils;
 import org.jocean.transportclient.api.HttpClient;
 import org.jocean.transportclient.api.HttpClientHandle;
 import org.jocean.transportclient.api.HttpReactor;
@@ -88,7 +86,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     
     @Override
     public ArgsHandler getArgsHandler() {
-        return TransportUtils.guardReferenceCountedArgsHandler();
+        return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
     }
     
     private void clearCurrentContent() {
@@ -284,68 +282,73 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	}
 
 	@OnEvent(event = "onHttpContentReceived")
-	private BizStep contentReceived(final HttpContent content) {
-        TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream);
+	private BizStep contentReceived(final Blob contentBlob) {
+	    BlockUtils.blob2OutputStream(contentBlob, this._bytesStream);
 		return RECVCONTENT;
 	}
 
     @OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final LastHttpContent content) throws Exception {
-        TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream);
+	private BizStep lastContentReceived(final Blob contentBlob) throws Exception {
+        BlockUtils.blob2OutputStream(contentBlob, this._bytesStream);
 		
         safeDetachHttpHandle();
 		
+        final InputStream is = 
+                Blob.Utils.releaseAndGenInputStream(this._bytesStream.drainToBlob());
+        
+        if (null==is) {
+            return null;
+        }
+        
+        if ( LOG.isTraceEnabled() ) {
+            is.mark(0);
+            printLongText(is, 80, is.available());
+            is.reset();
+        }
+        
         final SignalReactor<Object, Object> reactor = this._signalReactor;
         this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
         
-        if ( null != reactor) {
-            final Blob blob = this._bytesStream.drainToBlob();
-            final InputStream is = blob.genInputStream();
-            
-            blob.release();
-            
-            if ( LOG.isTraceEnabled() ) {
-                is.mark(0);
-                printLongText(is, 80, blob.length());
-                is.reset();
-            }
-
-            // final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
-            boolean feedbackResponse = false;
-			try {
-	            final byte[] bytes = new byte[is.available()];
-	            final int readed = is.read(bytes);
-	            final Object resp = JSON.parseObject(bytes,this._respCls);
-	            
-//                final Object resp = reader.readObject(this._respCls);
-                if ( null != resp ) {
-                    try {
-                        feedbackResponse = true;
-	                    reactor.onResponseReceived(this._ctx, resp);
-	                    if ( LOG.isTraceEnabled() ) {
-	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
-	                    }
+        try {
+            if ( null != reactor) {
+                boolean feedbackResponse = false;
+                // final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
+    			try {
+    	            final byte[] bytes = new byte[is.available()];
+    	            final int readed = is.read(bytes);
+    	            final Object resp = JSON.parseObject(bytes,this._respCls);
+    	            
+    //                final Object resp = reader.readObject(this._respCls);
+                    if ( null != resp ) {
+                        try {
+                            feedbackResponse = true;
+    	                    reactor.onResponseReceived(this._ctx, resp);
+    	                    if ( LOG.isTraceEnabled() ) {
+    	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
+    	                    }
+                        }
+                        catch (Throwable e) {
+                            LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
+                                    this._uri, ExceptionUtils.exception2detail(e));
+                        }
                     }
-                    catch (Exception e) {
-                        LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
-                                this._uri, ExceptionUtils.exception2detail(e));
+    			}
+    			catch (Throwable e) {
+    				LOG.warn("exception when prepare response for uri:{}, detail:{}", 
+    						this._uri, ExceptionUtils.exception2detail(e));
+    			}
+    			finally {
+                    if ( !feedbackResponse ) {
+                        // ensure notify onTransactionFailure with FAILURE_NOCONTENT
+                        this._signalReactor = reactor;
+                        setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
                     }
-                }
-			}
-			catch (Exception e) {
-				LOG.warn("exception when prepare response for uri:{}, detail:{}", 
-						this._uri, ExceptionUtils.exception2detail(e));
-			}
-			finally {
-                if ( !feedbackResponse ) {
-                    // ensure notify onTransactionFailure with FAILURE_NOCONTENT
-                    this._signalReactor = reactor;
-                    setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
-                }
-//                reader.close();
-                is.close();
-			}
-		}
+    			}
+    		}
+        }
+        finally {
+            is.close();
+        }
         
 		return null;
 	}

@@ -3,16 +3,13 @@
  */
 package org.jocean.rosa.impl.flow;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.LastHttpContent;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,7 +33,6 @@ import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
-import org.jocean.transportclient.TransportUtils;
 import org.jocean.transportclient.api.HttpClient;
 import org.jocean.transportclient.api.HttpClientHandle;
 import org.jocean.transportclient.api.HttpReactor;
@@ -59,7 +55,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             final BytesPool pool,
             final HttpStack stack, 
             final HttpBodyPartRepo repo) {
-        this._bytesPool = pool;
         this._bytesStream = new PooledBytesOutputStream(pool);
         this._stack = stack;
         this._partRepo = repo;
@@ -88,7 +83,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
     @Override
     public ArgsHandler getArgsHandler() {
-        return TransportUtils.guardReferenceCountedArgsHandler();
+        return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
     }
     
 	public final BizStep WAIT = new BizStep("blob.WAIT")
@@ -364,52 +359,20 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         }
     }
 
-    private long lastBlobDrainToBytesStream() {
-        long bytesAdded = 0;
-        if ( null != this._lastReceivedBlob ) {
-            // add last blob into _bytesStream
-            final InputStream is = Blob.Utils.releaseAndGenInputStream( this._lastReceivedBlob);
-            this._lastReceivedBlob = null;
-            if ( null != is ) {
-                try {
-                    bytesAdded = BlockUtils.inputStream2OutputStream(is, this._bytesStream);
-                }
-                finally {
-                    try {
-                        is.close();
-                    } catch (Throwable e) {
-                    }
-                }
-            }
-        }
-        return bytesAdded;
-    }
-
-    /**
-     * @param byteBuf
-     */
-    private void fillLastReceivedBlob(final ByteBuf byteBuf) {
-        final PooledBytesOutputStream os = new PooledBytesOutputStream(this._bytesPool);
-        if ( TransportUtils.byteBuf2OutputStream(byteBuf, os) > 0 ) {
-            this._lastReceivedBlob = os.drainToBlob();
-        }
-    }
-    
     @OnEvent(event = "onHttpContentReceived")
-	private BizStep contentReceived(final HttpContent content) {
-        updateAndNotifyCurrentProgress(lastBlobDrainToBytesStream());
-        fillLastReceivedBlob(content.content());
+	private BizStep contentReceived(final Blob contentBlob) {
+        updateAndNotifyCurrentProgress(
+                BlockUtils.blob2OutputStream(contentBlob, this._bytesStream));
         
 		return RECVCONTENT;
 	}
 
 
 	@OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final LastHttpContent content) 
+	private BizStep lastContentReceived(final Blob contentBlob) 
 	        throws Exception {
-        updateAndNotifyCurrentProgress(lastBlobDrainToBytesStream());
-        fillLastReceivedBlob(content.content());
-        updateAndNotifyCurrentProgress(lastBlobDrainToBytesStream());
+        updateAndNotifyCurrentProgress(
+                BlockUtils.blob2OutputStream(contentBlob, this._bytesStream));
         
         safeDetachHttpHandle();
 
@@ -635,10 +598,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
                     }
 
                     @Override
-                    public void onHttpContentReceived(HttpContent content)
+                    public void onHttpContentReceived(final Blob contentBlob)
                             throws Exception {
                         if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onHttpContentReceived(content);
+                            queryInterfaceInstance(HttpReactor.class).onHttpContentReceived(contentBlob);
                         }
                         else {
                             LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpContentReceived", 
@@ -648,9 +611,9 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
                     @Override
                     public void onLastHttpContentReceived(
-                            LastHttpContent content) throws Exception {
+                            Blob contentBlob) throws Exception {
                         if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onLastHttpContentReceived(content);
+                            queryInterfaceInstance(HttpReactor.class).onLastHttpContentReceived(contentBlob);
                         }
                         else {
                             LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onLastHttpContentReceived", 
@@ -667,10 +630,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             // release previous
             this._bodyPart.release();
             this._bodyPart = null;
-        }
-        if ( null != this._lastReceivedBlob ) {
-            this._lastReceivedBlob.release();
-            this._lastReceivedBlob = null;
         }
     }
     
@@ -692,7 +651,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     }
     
     private URI _uri;
-    private final BytesPool _bytesPool;
     private final HttpBodyPartRepo _partRepo;
     private final HttpStack _stack;
 	private int    _maxRetryCount = -1;
@@ -701,7 +659,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
 	private volatile HttpClientHandle _handle;
-	private Blob _lastReceivedBlob = null;
 	private HttpBodyPart _bodyPart = null;
 	private HttpResponse _response;
 	private long _totalLength = -1;
