@@ -3,6 +3,7 @@
  */
 package org.jocean.rosa.impl.flow;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
@@ -58,6 +59,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             final BytesPool pool,
             final HttpStack stack, 
             final HttpBodyPartRepo repo) {
+        this._bytesPool = pool;
         this._bytesStream = new PooledBytesOutputStream(pool);
         this._stack = stack;
         this._partRepo = repo;
@@ -362,18 +364,53 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         }
     }
 
+    private long lastBlobDrainToBytesStream() {
+        long bytesAdded = 0;
+        if ( null != this._lastReceivedBlob ) {
+            // add last blob into _bytesStream
+            final InputStream is = Blob.Utils.releaseAndGenInputStream( this._lastReceivedBlob);
+            this._lastReceivedBlob = null;
+            if ( null != is ) {
+                try {
+                    bytesAdded = BlockUtils.inputStream2OutputStream(is, this._bytesStream);
+                }
+                finally {
+                    try {
+                        is.close();
+                    } catch (Throwable e) {
+                    }
+                }
+            }
+        }
+        return bytesAdded;
+    }
+
+    /**
+     * @param byteBuf
+     */
+    private void fillLastReceivedBlob(final ByteBuf byteBuf) {
+        final PooledBytesOutputStream os = new PooledBytesOutputStream(this._bytesPool);
+        if ( TransportUtils.byteBuf2OutputStream(byteBuf, os) > 0 ) {
+            this._lastReceivedBlob = os.drainToBlob();
+        }
+    }
+    
     @OnEvent(event = "onHttpContentReceived")
 	private BizStep contentReceived(final HttpContent content) {
-		updateAndNotifyCurrentProgress(
-			TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream));
+        updateAndNotifyCurrentProgress(lastBlobDrainToBytesStream());
+        fillLastReceivedBlob(content.content());
+        
 		return RECVCONTENT;
 	}
 
+
 	@OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final LastHttpContent content) throws Exception {
-		updateAndNotifyCurrentProgress(
-			TransportUtils.byteBuf2OutputStream(content.content(), this._bytesStream));
-		
+	private BizStep lastContentReceived(final LastHttpContent content) 
+	        throws Exception {
+        updateAndNotifyCurrentProgress(lastBlobDrainToBytesStream());
+        fillLastReceivedBlob(content.content());
+        updateAndNotifyCurrentProgress(lastBlobDrainToBytesStream());
+        
         safeDetachHttpHandle();
 
         safeRemovePartFromRepo();
@@ -631,6 +668,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             this._bodyPart.release();
             this._bodyPart = null;
         }
+        if ( null != this._lastReceivedBlob ) {
+            this._lastReceivedBlob.release();
+            this._lastReceivedBlob = null;
+        }
     }
     
     private void safeDetachHttpHandle() {
@@ -651,6 +692,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     }
     
     private URI _uri;
+    private final BytesPool _bytesPool;
     private final HttpBodyPartRepo _partRepo;
     private final HttpStack _stack;
 	private int    _maxRetryCount = -1;
@@ -659,6 +701,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
 	private volatile HttpClientHandle _handle;
+	private Blob _lastReceivedBlob = null;
 	private HttpBodyPart _bodyPart = null;
 	private HttpResponse _response;
 	private long _totalLength = -1;
