@@ -12,6 +12,8 @@ import io.netty.handler.codec.http.HttpVersion;
 
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.BizStep;
@@ -173,10 +175,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         }
         
         tryStartForceFinishedTimer();
-        return ((BizStep)this.fireDelayEventAndPush(
+        return ((BizStep)this.fireDelayEventAndAddTo(
                 this.SCHEDULE.makeDelayEvent(
                     selfInvoker("onScheduled"), 
-                    this._timeoutBeforeRetry)))
+                    this._timeoutBeforeRetry), 
+                    this._timers))
                 .freeze();
     }
     
@@ -192,7 +195,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("fetch response for uri:{} when scheduling and canceled", this._uri);
         }
-        this.popAndCancelDealyEvents();
+        this.removeAndCancelAllDealyEvents(this._timers);
         safeDetachHttpHandle();
         return null;
     }
@@ -438,4 +441,5 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     private HttpClientHandle _handle;
     private Detachable _forceFinishedTimer;
     private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
+    private final List<Detachable> _timers = new ArrayList<Detachable>();
 }

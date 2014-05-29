@@ -14,6 +14,8 @@ import io.netty.handler.codec.http.HttpVersion;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.BizStep;
@@ -167,10 +169,11 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         }
         
         tryStartForceFinishedTimer();
-        return ((BizStep)this.fireDelayEventAndPush(
+        return ((BizStep)this.fireDelayEventAndAddTo(
                 this.SCHEDULE.makeDelayEvent(
                     selfInvoker("onScheduled"), 
-                    this._timeoutBeforeRetry)))
+                    this._timeoutBeforeRetry), 
+                    this._timers))
                 .freeze();
     }
     
@@ -186,7 +189,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("download blob {} when scheduling and canceled", this._uri);
         }
-        this.popAndCancelDealyEvents();
+        this.removeAndCancelAllDealyEvents( this._timers);
         safeDetachHttpHandle();
         return null;
     }
@@ -669,4 +672,5 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	private final PooledBytesOutputStream _bytesStream;
 	private BlobReactor<Object> _blobReactor;
 	private Object _ctx;
+    private final List<Detachable> _timers = new ArrayList<Detachable>();
 }
