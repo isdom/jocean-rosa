@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 public class FixNeverReachFINISHEDStateSSLEngine extends SSLEngine {
 
 	private static final Logger LOG =
-			LoggerFactory.getLogger("FixNeverReachFINISHEDStateSSLEngine");
+			LoggerFactory.getLogger(FixNeverReachFINISHEDStateSSLEngine.class);
 	
 	/* (non-Javadoc)
 	 * @see javax.net.ssl.SSLEngine#beginHandshake()

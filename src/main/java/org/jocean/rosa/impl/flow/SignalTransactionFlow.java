@@ -20,10 +20,16 @@ import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnEvent;
+import org.jocean.httpclient.HttpStack;
+import org.jocean.httpclient.api.Guide;
+import org.jocean.httpclient.api.Guide.GuideReactor;
+import org.jocean.httpclient.api.HttpClient;
+import org.jocean.httpclient.api.HttpClient.HttpReactor;
 import org.jocean.idiom.ArgsHandler;
 import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.ValidationId;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
@@ -31,10 +37,6 @@ import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BusinessServerAgent.SignalReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
-import org.jocean.transportclient.api.HttpClient;
-import org.jocean.transportclient.api.HttpClientHandle;
-import org.jocean.transportclient.api.HttpReactor;
-import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -133,8 +135,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	}
 	
 	@OnEvent(event = "onHttpClientLost")
-	private BizStep onHttpLost()
+	private BizStep onHttpLost(final int guideId)
 			throws Exception {
+        if ( !isValidGuideId(guideId) ) {
+            return this.currentEventHandler();
+        }
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("http for {} lost.", this._uri);
 		}
@@ -231,14 +236,17 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	}
 	
 	@OnEvent(event = "onHttpClientObtained")
-	private BizStep onHttpObtained(final HttpClient httpclient) {
+	private BizStep onHttpObtained(final int guideId, final HttpClient httpclient) {
+        if ( !isValidGuideId(guideId) ) {
+            return this.currentEventHandler();
+        }
 		final HttpRequest request = 
 		        this._converter.processHttpRequest( this._request, genHttpRequest(this._uri));
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("send http request {}", request);
 		}
         try {
-            httpclient.sendHttpRequest( request );
+            httpclient.sendHttpRequest(this._httpClientId.updateIdAndGet(), request, genHttpReactor() );
         }
         catch (Exception e) {
             LOG.error("state({})/{}: exception when sendHttpRequest, detail:{}", 
@@ -248,6 +256,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 		return RECVRESP;
 	}
 
+    @SuppressWarnings("unchecked")
+    private HttpReactor<Integer> genHttpReactor() {
+        return (HttpReactor<Integer>)this.queryInterfaceInstance(HttpReactor.class);
+    }
+    
     private void tryStartForceFinishedTimer() {
         if ( null == this._forceFinishedTimer && this._timeoutFromActived > 0) {
             this._forceFinishedTimer = this.selfExectionLoop().schedule(new Runnable() {
@@ -269,7 +282,10 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     }
     
 	@OnEvent(event = "onHttpResponseReceived")
-	private BizStep responseReceived(final HttpResponse response) {
+	private BizStep responseReceived(final int httpClientId, final HttpResponse response) {
+        if ( !isValidHttpClientId(httpClientId)) {
+            return this.currentEventHandler();
+        }
 		if ( LOG.isDebugEnabled() ) {
 			LOG.debug("channel for {} recv response {}", this._uri, response);
 		}
@@ -285,13 +301,19 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	}
 
 	@OnEvent(event = "onHttpContentReceived")
-	private BizStep contentReceived(final Blob contentBlob) {
+	private BizStep contentReceived(final int httpClientId, final Blob contentBlob) {
+        if ( !isValidHttpClientId(httpClientId)) {
+            return this.currentEventHandler();
+        }
 	    BlockUtils.blob2OutputStream(contentBlob, this._bytesStream);
 		return RECVCONTENT;
 	}
 
     @OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final Blob contentBlob) throws Exception {
+	private BizStep lastContentReceived(final int httpClientId, final Blob contentBlob) throws Exception {
+        if ( !isValidHttpClientId(httpClientId)) {
+            return this.currentEventHandler();
+        }
         BlockUtils.blob2OutputStream(contentBlob, this._bytesStream);
 		
         safeDetachHttpHandle();
@@ -400,29 +422,65 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
 	}
 	
     private void startObtainHttpClient() {
-        this._handle = this._stack.createHttpClientHandle();
-        this._handle.obtainHttpClient( 
-                new HttpClientHandle.DefaultContext()
+        this._guide = this._stack.createHttpClientGuide();
+        this._guide.obtainHttpClient( 
+                this._guideId.updateIdAndGet(), 
+                genGuideReactor(),
+                new Guide.DefaultRequirement()
                     .uri(this._uri)
                     .priority( null != this._policy ? this._policy.priority() : 0)
-                , this.queryInterfaceInstance(HttpReactor.class) );
+                );
+    }
+
+    /**
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    private GuideReactor<Integer> genGuideReactor() {
+        return (GuideReactor<Integer>)this.queryInterfaceInstance(GuideReactor.class);
     }
 
     private void safeDetachHttpHandle() {
-        if ( null != this._handle ) {
+        if ( null != this._guide ) {
             try {
-                this._handle.detach();
+                this._guide.detach();
             }
             catch (Exception e) {
                 LOG.warn("exception when detach http handle for uri:{}, detail:{}",
                         this._uri, ExceptionUtils.exception2detail(e));
             }
-            this._handle = null;
+            this._guide = null;
         }
     }
     
     private void setFailureReason(final int failureReason) {
         this._failureReason = failureReason;
+    }
+    
+    private boolean isValidGuideId(final int guideId) {
+        final boolean ret = this._guideId.isValidId(guideId);
+        if (!ret) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(
+                        "SignalTransactionFlow({})/{}/{}: special guide id({}) is !NOT! current guide id ({}), just ignore.",
+                        this, currentEventHandler().getName(), currentEvent(),
+                        guideId, this._guideId);
+            }
+        }
+        return ret;
+    }
+    
+    private boolean isValidHttpClientId(final int httpClientId) {
+        final boolean ret = this._httpClientId.isValidId(httpClientId);
+        if (!ret) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(
+                        "SignalTransactionFlow({})/{}/{}: special httpclient id({}) is !NOT! current httpclient id ({}), just ignore.",
+                        this, currentEventHandler().getName(), currentEvent(),
+                        httpClientId, this._httpClientId);
+            }
+        }
+        return ret;
     }
     
     private final HttpStack _stack;
@@ -438,7 +496,9 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
     private final PooledBytesOutputStream _bytesStream;
     private Object  _ctx;
 	private SignalReactor<Object, Object> _signalReactor;
-    private HttpClientHandle _handle;
+    private Guide _guide;
+    private final ValidationId _guideId = new ValidationId();
+    private final ValidationId _httpClientId = new ValidationId();
     private Detachable _forceFinishedTimer;
     private int _failureReason = TransactionConstants.FAILURE_UNKNOWN;
     private final List<Detachable> _timers = new ArrayList<Detachable>();

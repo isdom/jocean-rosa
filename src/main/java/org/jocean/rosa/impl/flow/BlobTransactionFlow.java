@@ -22,10 +22,17 @@ import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnEvent;
+import org.jocean.httpclient.HttpStack;
+import org.jocean.httpclient.api.Guide;
+import org.jocean.httpclient.api.Guide.GuideReactor;
+import org.jocean.httpclient.api.HttpClient;
+import org.jocean.httpclient.api.HttpClient.HttpReactor;
+import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.ArgsHandler;
 import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.ValidationId;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
@@ -35,11 +42,6 @@ import org.jocean.rosa.api.HttpBodyPart;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
-import org.jocean.transportclient.api.HttpClient;
-import org.jocean.transportclient.api.HttpClientHandle;
-import org.jocean.transportclient.api.HttpReactor;
-import org.jocean.transportclient.http.HttpStack;
-import org.jocean.transportclient.http.HttpUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,8 +128,12 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	}
 
 	@OnEvent(event = "onHttpClientLost")
-	private BizStep onHttpLost()
+	private BizStep onHttpLost(final int guideId)
 			throws Exception {
+        if ( !isValidGuideId(guideId) ) {
+            return this.currentEventHandler();
+        }
+        
         if ( LOG.isDebugEnabled() ) {
             LOG.debug("http for {} lost.", this._uri);
         }
@@ -221,7 +227,11 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	}
 
 	@OnEvent(event = "onHttpClientObtained")
-	private BizStep onHttpObtained(final HttpClient httpclient) {
+	private BizStep onHttpObtained(final int guideId, final HttpClient httpclient) {
+	    if ( !isValidGuideId(guideId) ) {
+	        return this.currentEventHandler();
+	    }
+	    
 		if ( null != this._blobReactor ) {
 			try {
 				this._blobReactor.onTransportActived(this._ctx);
@@ -236,7 +246,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 			LOG.debug("send http request {}", request);
 		}
 		try {
-		    httpclient.sendHttpRequest( request );
+		    httpclient.sendHttpRequest(this._httpClientId.updateIdAndGet(), request, genHttpReactor() );
 		}
 		catch (Exception e) {
 		    LOG.error("state({})/{}: exception when sendHttpRequest, detail:{}", 
@@ -245,6 +255,14 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 		tryStartForceFinishedTimer();
 		return RECVRESP;
 	}
+
+    /**
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    private HttpReactor<Integer> genHttpReactor() {
+        return (HttpReactor<Integer>)this.queryInterfaceInstance(HttpReactor.class);
+    }
 
     private void tryStartForceFinishedTimer() {
         if ( null == this._forceFinishedTimer && this._timeoutFromActived > 0) {
@@ -267,7 +285,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     }
 
 	@OnEvent(event = "onHttpResponseReceived")
-	private BizStep responseReceived(final HttpResponse response) {
+	private BizStep responseReceived(final int httpClientId, final HttpResponse response) {
+	    if ( !isValidHttpClientId(httpClientId)) {
+	        return this.currentEventHandler();
+	    }
 		this._response = response;
 		this._totalLength = HttpHeaders.getContentLength(response, -1);
 		this._currentPos = 0;
@@ -363,7 +384,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     }
 
     @OnEvent(event = "onHttpContentReceived")
-	private BizStep contentReceived(final Blob contentBlob) {
+	private BizStep contentReceived(final int httpClientId, final Blob contentBlob) {
+        if ( !isValidHttpClientId(httpClientId)) {
+            return this.currentEventHandler();
+        }
         updateAndNotifyCurrentProgress(
                 BlockUtils.blob2OutputStream(contentBlob, this._bytesStream));
         
@@ -372,8 +396,11 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
 
 	@OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final Blob contentBlob) 
+	private BizStep lastContentReceived(final int httpClientId, final Blob contentBlob) 
 	        throws Exception {
+        if ( !isValidHttpClientId(httpClientId)) {
+            return this.currentEventHandler();
+        }
         updateAndNotifyCurrentProgress(
                 BlockUtils.blob2OutputStream(contentBlob, this._bytesStream));
         
@@ -434,11 +461,15 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 	}
 
 	@OnEvent(event = "onHttpClientLost")
-	private BizStep onHttpLostAndSaveUncompleteContent() throws Exception {
-		saveHttpBodyPart();
+	private BizStep onHttpLostAndSaveUncompleteContent(final int guideId) 
+	        throws Exception {
+        if ( !isValidGuideId(guideId) ) {
+            return this.currentEventHandler();
+        }
+	    saveHttpBodyPart();
 		notifyReactorTransportInactived();
 		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("channel for {} closed.", _uri);
+			LOG.debug("channel for {} closed.", this._uri);
 		}
 		return incRetryAndSelectStateByRetry();
 	}
@@ -556,73 +587,23 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             }
         }
         
-        this._handle = this._stack.createHttpClientHandle();
-        final HttpClientHandle currentHandle = this._handle;
+        this._guide = this._stack.createHttpClientGuide();
         
-        this._handle.obtainHttpClient( 
-                new HttpClientHandle.DefaultContext()
+        this._guide.obtainHttpClient(
+                this._guideId.updateIdAndGet(), 
+                genGuideReactor(),
+                new Guide.DefaultRequirement()
                     .uri(this._uri)
                     .priority( null != this._policy ? this._policy.priority() : 0)
-                , 
-                new HttpReactor() {
-                    @Override
-                    public void onHttpClientObtained(HttpClient httpClient)
-                            throws Exception {
-                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onHttpClientObtained(httpClient);
-                        }
-                        else {
-                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpClientObtained", 
-                                    BlobTransactionFlow.this._handle, currentHandle);
-                        }
-                    }
+            );
+    }
 
-                    @Override
-                    public void onHttpClientLost() throws Exception {
-                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onHttpClientLost();
-                        }
-                        else {
-                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpClientLost", 
-                                    BlobTransactionFlow.this._handle, currentHandle);
-                        }
-                    }
-
-                    @Override
-                    public void onHttpResponseReceived(HttpResponse response)
-                            throws Exception {
-                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onHttpResponseReceived(response);
-                        }
-                        else {
-                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpResponseReceived", 
-                                    BlobTransactionFlow.this._handle, currentHandle);
-                        }
-                    }
-
-                    @Override
-                    public void onHttpContentReceived(final Blob contentBlob)
-                            throws Exception {
-                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onHttpContentReceived(contentBlob);
-                        }
-                        else {
-                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onHttpContentReceived", 
-                                    BlobTransactionFlow.this._handle, currentHandle);
-                        }
-                    }
-
-                    @Override
-                    public void onLastHttpContentReceived(
-                            Blob contentBlob) throws Exception {
-                        if ( currentHandle == BlobTransactionFlow.this._handle ) {
-                            queryInterfaceInstance(HttpReactor.class).onLastHttpContentReceived(contentBlob);
-                        }
-                        else {
-                            LOG.warn("HttpClientHandle mismatch current({})/stored({}), ignore onLastHttpContentReceived", 
-                                    BlobTransactionFlow.this._handle, currentHandle);
-                        }
-                    }});
+    /**
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    private GuideReactor<Integer> genGuideReactor() {
+        return (GuideReactor<Integer>)queryInterfaceInstance(GuideReactor.class);
     }
 
     /**
@@ -637,20 +618,46 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     }
     
     private void safeDetachHttpHandle() {
-        if ( null != this._handle ) {
+        if ( null != this._guide ) {
             try {
-                this._handle.detach();
+                this._guide.detach();
             }
             catch (Exception e) {
                 LOG.warn("exception when detach http handle for uri:{}, detail:{}",
                         this._uri, ExceptionUtils.exception2detail(e));
             }
-            this._handle = null;
+            this._guide = null;
         }
     }
     
     private void setFailureReason(final int failureReason) {
         this._failureReason = failureReason;
+    }
+    
+    private boolean isValidGuideId(final int guideId) {
+        final boolean ret = this._guideId.isValidId(guideId);
+        if (!ret) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(
+                        "BlobTransactionFlow({})/{}/{}: special guide id({}) is !NOT! current guide id ({}), just ignore.",
+                        this, currentEventHandler().getName(), currentEvent(),
+                        guideId, this._guideId);
+            }
+        }
+        return ret;
+    }
+    
+    private boolean isValidHttpClientId(final int httpClientId) {
+        final boolean ret = this._httpClientId.isValidId(httpClientId);
+        if (!ret) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(
+                        "BlobTransactionFlow({})/{}/{}: special httpclient id({}) is !NOT! current httpclient id ({}), just ignore.",
+                        this, currentEventHandler().getName(), currentEvent(),
+                        httpClientId, this._httpClientId);
+            }
+        }
+        return ret;
     }
     
     private URI _uri;
@@ -661,7 +668,9 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
     private long   _timeoutFromActived = -1;
     private long   _timeoutBeforeRetry = 1000L;
     private TransactionPolicy _policy = null;
-	private volatile HttpClientHandle _handle;
+	private Guide _guide;
+    private final ValidationId _guideId = new ValidationId();
+    private final ValidationId _httpClientId = new ValidationId();
 	private HttpBodyPart _bodyPart = null;
 	private HttpResponse _response;
 	private long _totalLength = -1;

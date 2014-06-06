@@ -26,6 +26,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.event.api.EventReceiverSource;
+import org.jocean.httpclient.HttpStack;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
@@ -40,7 +41,6 @@ import org.jocean.rosa.api.BusinessServerAgent;
 import org.jocean.rosa.api.RequestFeature;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow;
 import org.jocean.rosa.impl.flow.SignalTransactionFlow.SignalConverter;
-import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +56,7 @@ import com.jcraft.jzlib.JZlib;
 public class BusinessServerImpl implements BusinessServerAgent {
 
 	private static final Logger LOG =
-			LoggerFactory.getLogger("rose.impl.BusinessServerImpl");
+			LoggerFactory.getLogger(BusinessServerImpl.class);
 
 	//	invoke in main UI thread
     @Override

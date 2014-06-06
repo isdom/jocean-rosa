@@ -1,14 +1,14 @@
 /**
  * 
  */
-package org.jocean.transportclient;
+package org.jocean.netty;
 
 
 /**
  * @author isdom
  *
  */
-public class TransportEvents {
+public class NettyEvents {
 	
 	//	params: ChannelHandlerContext ctx
 	public static final String CHANNEL_REGISTERED 		= "_channelRegistered";

@@ -46,8 +46,8 @@
 		<dependency org="org.slf4j" name="slf4j-api" rev="1.7.6" 
             conf="compile->default(*)"/>
 			
-        <dependency org="org.jocean" name="jocean-idiom" rev="0.0.9" 
-            conf="compile->default(*)"/>
+        <dependency org="org.jocean" name="jocean-idiom" rev="0.1.0-SNAPSHOT" 
+            conf="compile->default(*)" changing="true"/>
         
         <dependency org="org.jocean" name="jocean-event-api" rev="0.0.4-SNAPSHOT" 
             conf="compile->default(*)" changing="true"/>

@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.transportclient;
+package org.jocean.netty;
 
 import java.util.concurrent.TimeUnit;
 
@@ -23,15 +23,19 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class TransportClient {
+public class NettyClient {
 	
 	private static final Logger LOG =
-			LoggerFactory.getLogger("transportclient.TransportClient");
+			LoggerFactory.getLogger(NettyClient.class);
 	
-	public TransportClient() {
+    public NettyClient() {
+        this(1);
+    }
+    
+	public NettyClient(final int processThreadNumber) {
         // Configure the client.
     	this._bootstrap = new Bootstrap()
-    		.group(new NioEventLoopGroup(1))
+    		.group(new NioEventLoopGroup(processThreadNumber))
     		.channel(NioSocketChannel.class)
     		.handler(new ChannelInitializer<Channel>() {
 
@@ -67,7 +71,7 @@ public class TransportClient {
             }};
 	}
 	
-	public EventLoop eventLoop() {
+	private EventLoop eventLoop() {
 		return this._bootstrap.group().next();
 	}
 	
@@ -83,8 +87,8 @@ public class TransportClient {
 	public Channel newChannel() {
 		final Channel ch = this._bootstrap.register().channel();
 		//ch.config().setAllocator(new AlwaysUnpooledHeapByteBufAllocator() );
-		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("create new channel: {}", ch);
+		if ( LOG.isTraceEnabled() ) {
+			LOG.trace("create new channel: {}", ch);
 		}
 		return	ch;
 	}

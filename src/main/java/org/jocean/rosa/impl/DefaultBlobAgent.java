@@ -4,11 +4,11 @@
 package org.jocean.rosa.impl;
 
 import org.jocean.event.api.EventReceiverSource;
+import org.jocean.httpclient.HttpStack;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BlobAgent;
 import org.jocean.rosa.api.HttpBodyPartRepo;
 import org.jocean.rosa.impl.flow.BlobTransactionFlow;
-import org.jocean.transportclient.http.HttpStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +20,7 @@ public class DefaultBlobAgent implements BlobAgent {
 
 	@SuppressWarnings("unused")
     private static final Logger LOG =
-			LoggerFactory.getLogger("rose.impl.DefaultBlobAgent");
+			LoggerFactory.getLogger(DefaultBlobAgent.class);
 
     @Override
     public BlobTransaction createBlobTransaction() {

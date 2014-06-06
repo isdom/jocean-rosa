@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.transportclient;
+package org.jocean.netty;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -18,7 +18,7 @@ public abstract class EventReceiverInboundHandler<I> extends
 		SimpleChannelInboundHandler<I> {
 	
 	private static final Logger LOG =
-			LoggerFactory.getLogger("transportclient.EventReceiverInboundHandler");
+			LoggerFactory.getLogger(EventReceiverInboundHandler.class);
 	
 	public EventReceiverInboundHandler(final EventReceiver receiver) {
 		this._receiver = receiver;
@@ -31,7 +31,7 @@ public abstract class EventReceiverInboundHandler<I> extends
         }
         
 		super.channelRegistered(ctx);
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_REGISTERED, ctx);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_REGISTERED, ctx);
 	}
 
     /* remove from netty-all 5.0.0.Alpha1
@@ -43,7 +43,7 @@ public abstract class EventReceiverInboundHandler<I> extends
 			LOG.debug("channelUnregistered: ch{}, uri:{}", ctx.channel(), uri);
 		}
 		
-		eventReceiver.acceptEvent(TransportEvents.CHANNEL_UNREGISTERED, ctx);
+		eventReceiver.acceptEvent(NettyEvents.CHANNEL_UNREGISTERED, ctx);
 	}
 	*/
 
@@ -54,7 +54,7 @@ public abstract class EventReceiverInboundHandler<I> extends
         }
 
 		super.channelActive(ctx);
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_ACTIVE, ctx);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
 	}
 
 	@Override
@@ -64,7 +64,7 @@ public abstract class EventReceiverInboundHandler<I> extends
         }
         
 		super.channelInactive(ctx);
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_INACTIVE, ctx);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_INACTIVE, ctx);
 	}
 
 	@Override
@@ -74,7 +74,7 @@ public abstract class EventReceiverInboundHandler<I> extends
         }
         
 		super.channelReadComplete(ctx);
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_READCOMPLETE, ctx);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_READCOMPLETE, ctx);
 	}
 
 	@Override
@@ -85,7 +85,7 @@ public abstract class EventReceiverInboundHandler<I> extends
         }
         
 		super.userEventTriggered(ctx, evt);
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_USEREVENTTRIGGERED, ctx, evt);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_USEREVENTTRIGGERED, ctx, evt);
 	}
 
 	@Override
@@ -97,7 +97,7 @@ public abstract class EventReceiverInboundHandler<I> extends
         }
         
 		super.channelWritabilityChanged(ctx);
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_WRITABILITYCHANGED, ctx);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_WRITABILITYCHANGED, ctx);
 	}
 	
     @Override
@@ -105,7 +105,7 @@ public abstract class EventReceiverInboundHandler<I> extends
             ChannelHandlerContext ctx, Throwable cause) throws Exception {
     	LOG.warn("exceptionCaught: ch(" + ctx.channel() + "), detail:", cause);
     	try {
-    		this._receiver.acceptEvent(TransportEvents.CHANNEL_EXCEPTIONCAUGHT, ctx, cause);
+    		this._receiver.acceptEvent(NettyEvents.CHANNEL_EXCEPTIONCAUGHT, ctx, cause);
     	}
     	finally {
     		ctx.close();
@@ -120,7 +120,7 @@ public abstract class EventReceiverInboundHandler<I> extends
 			LOG.debug("messageReceived: ch{}, msg:{}", ctx.channel(), msg );
 		}
 		
-		this._receiver.acceptEvent(TransportEvents.CHANNEL_MESSAGERECEIVED, ctx, msg);
+		this._receiver.acceptEvent(NettyEvents.CHANNEL_MESSAGERECEIVED, ctx, msg);
 	}
 
 	protected final EventReceiver _receiver;

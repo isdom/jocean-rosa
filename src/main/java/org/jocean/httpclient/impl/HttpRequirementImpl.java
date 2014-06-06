@@ -1,21 +1,21 @@
 /**
  * 
  */
-package org.jocean.transportclient.http;
+package org.jocean.httpclient.impl;
 
 import java.net.URI;
 
-import org.jocean.transportclient.api.HttpClientHandle;
+import org.jocean.httpclient.api.Guide;
 
 /**
  * @author isdom
  *
  */
-class HandleContextImpl<OWNER> implements HttpClientHandle.Context {
+class HttpRequirementImpl<OWNER> implements Guide.Requirement {
 
-    public HandleContextImpl(final HttpClientHandle.Context ctx, final OWNER owner) {
-        this._priority = ctx.priority();
-        this._uri = ctx.uri();
+    public HttpRequirementImpl(final Guide.Requirement requirement, final OWNER owner) {
+        this._priority = requirement.priority();
+        this._uri = requirement.uri();
         this._owner = owner;
     }
     
@@ -35,7 +35,7 @@ class HandleContextImpl<OWNER> implements HttpClientHandle.Context {
     
     @Override
     public String toString() {
-        return "handlectx [priority=" + _priority
+        return "handleRequirement [priority=" + _priority
                 + ", uri=" + _uri + "]";
     }
 

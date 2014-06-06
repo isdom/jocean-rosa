@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.transportclient;
+package org.jocean.netty;
 
 import io.netty.channel.Channel;
 
@@ -12,10 +12,10 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class TransportUtils {
+public class NettyUtils {
 
 	private static final Logger LOG =
-			LoggerFactory.getLogger("transportclient.TransportUtils");
+			LoggerFactory.getLogger(NettyUtils.class);
 	
 	public static void awaitForAllEnded(final Channel[] channels) throws Exception {
     	try {

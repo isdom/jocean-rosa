@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.jocean.transportclient.http;
+package org.jocean.httpclient.impl;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
@@ -33,11 +33,10 @@ import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
+import org.jocean.netty.EventReceiverInboundHandler;
+import org.jocean.netty.NettyEvents;
 import org.jocean.ssl.FixNeverReachFINISHEDStateSSLEngine;
 import org.jocean.ssl.SecureChatSslContextFactory;
-import org.jocean.transportclient.EventReceiverInboundHandler;
-import org.jocean.transportclient.TransportEvents;
-import org.jocean.transportclient.http.Events.HttpEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +46,7 @@ import org.slf4j.LoggerFactory;
  */
 public class HttpUtils {
 	private static final Logger LOG =
-			LoggerFactory.getLogger("transportclient.HttpUtils");
+			LoggerFactory.getLogger(HttpUtils.class);
 	
 	//	return null means no Partial Begin
 	public static String getPartialBeginFromContentRange(final String contentRange) {
@@ -104,8 +103,20 @@ public class HttpUtils {
 		return false;
 	}
 	
-	private static final class HttpHandler extends EventReceiverInboundHandler<HttpObject> {
+    final static class HttpEvents {
+        //  HTTP events
+        //  params: ChannelHandlerContext ctx, HttpResponse response
+        static final String HTTPRESPONSERECEIVED    = "_httpResponseReceived";
 
+        //  params: ChannelHandlerContext ctx, HttpContent content
+        static final String HTTPCONTENTRECEIVED     = "_httpContentReceived";
+
+        //  params: ChannelHandlerContext ctx, LastHttpContent lastContent
+        static final String LASTHTTPCONTENTRECEIVED= "_lastHttpContentReceived";
+    }
+    
+	private static final class HttpHandler extends EventReceiverInboundHandler<HttpObject> {
+	    
 		private final boolean _sslEnabled;
 		private final BytesPool _bytesPool;
 		
@@ -124,7 +135,7 @@ public class HttpUtils {
 	        ctx.fireChannelActive();
 			
 			if ( !this._sslEnabled ) {
-				this._receiver.acceptEvent(TransportEvents.CHANNEL_ACTIVE, ctx);
+				this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
 			}
 		}
 		
@@ -139,11 +150,11 @@ public class HttpUtils {
 			
 			if ( this._sslEnabled && (evt instanceof SslHandshakeCompletionEvent)) {
 				if ( ((SslHandshakeCompletionEvent)evt).isSuccess() ) {
-    				this._receiver.acceptEvent(TransportEvents.CHANNEL_ACTIVE, ctx);
+    				this._receiver.acceptEvent(NettyEvents.CHANNEL_ACTIVE, ctx);
 				}
 			}
 			else {
-				this._receiver.acceptEvent(TransportEvents.CHANNEL_USEREVENTTRIGGERED, ctx, evt);
+				this._receiver.acceptEvent(NettyEvents.CHANNEL_USEREVENTTRIGGERED, ctx, evt);
 			}
 		}
 		
