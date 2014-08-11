@@ -116,6 +116,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
 
     private final BizStep SCHEDULE = new BizStep("blob.SCHEDULE")
             .handler(selfInvoker("schedulingOnDetach"))
+            .delayed(selfInvoker("onScheduled"))
             .freeze();
     
 	@OnEvent(event="detach")
@@ -176,10 +177,8 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
         
         tryStartForceFinishedTimer();
         return ((BizStep)this.fireDelayEventAndAddTo(
-                this.SCHEDULE.makeDelayEvent(
-                    selfInvoker("onScheduled"), 
-                    this._timeoutBeforeRetry), 
-                    this._timers))
+                this.SCHEDULE.makePredefineDelayEvent(this._timeoutBeforeRetry), 
+                this._timers))
                 .freeze();
     }
     
