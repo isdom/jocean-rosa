@@ -101,6 +101,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
                 LOG.debug("download {} canceled", _downloadable);
             }
             safeDetachHttpGuide();
+            setFailureDetachedIfNotSetted();
             return null;
         }
     };
@@ -309,6 +310,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
             }
             removeAndCancelAllDealyEvents(_timers);
             safeDetachHttpGuide();
+            setFailureDetachedIfNotSetted();
             return null;
         }
         
@@ -471,7 +473,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
 		if ( downloadable.isPartialDownload() ) {
 			//	add Range info
 			request.headers().set(HttpHeaders.Names.RANGE, "bytes=" + downloadable.getDownloadedSize() + "-");
-			final String etag = downloadable.getETag();
+			final String etag = downloadable.getEtag();
 			if ( null != etag ) {
 				request.headers().set(HttpHeaders.Names.IF_RANGE, etag);
 			}
@@ -569,6 +571,12 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
         return ret;
     }
     
+    private void setFailureDetachedIfNotSetted() {
+        if ( TransactionConstants.FAILURE_UNKNOWN == this._failureReason ) {
+            this.setFailureReason(TransactionConstants.FAILURE_DETACHED);
+        }
+    }
+
     private Downloadable _downloadable;
     private final HttpStack _stack;
 	private int    _maxRetryCount = -1;

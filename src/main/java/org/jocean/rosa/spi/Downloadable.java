@@ -25,7 +25,7 @@ public interface Downloadable {
 
     public void updateResponse(final HttpResponse response);
 
-    public String getETag();
+    public String getEtag();
 
     public boolean isPartialDownload();
 }

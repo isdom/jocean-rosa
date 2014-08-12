@@ -11,6 +11,8 @@ import java.io.RandomAccessFile;
 import java.net.URI;
 import java.util.UUID;
 
+import javax.ws.rs.core.HttpHeaders;
+
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
@@ -18,6 +20,9 @@ import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.spi.Downloadable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.alibaba.fastjson.annotation.JSONCreator;
+import com.alibaba.fastjson.annotation.JSONField;
 
 /**
  * @author isdom
@@ -28,8 +33,7 @@ public class FileDownload implements Downloadable {
     private static final Logger LOG = LoggerFactory
             .getLogger(FileDownload.class);
     
-    public FileDownload(final URI uri, final File file, final BytesPool pool) {
-        this._pool = pool;
+    public FileDownload(final URI uri, final File file) {
         this._id = UUID.randomUUID().toString();
         this._uri = uri;
         this._file = file;
@@ -37,35 +41,74 @@ public class FileDownload implements Downloadable {
         this._etag = null;
     }
     
+    @JSONCreator
+    public FileDownload(
+            @JSONField(name="id")
+            final String id,
+            @JSONField(name="uri")
+            final URI uri, 
+            @JSONField(name="downloadedFile")
+            final String filePath,
+            @JSONField(name="etag")
+            final String etag,
+            @JSONField(name="downloadedSize")
+            final int downloadedSize
+            ) {
+        this._id = id;
+        this._uri = uri;
+        this._file = new File(filePath);
+        this._downloadedSize = downloadedSize;
+        this._etag = etag;
+    }
+    
+    public FileDownload setPool(final BytesPool pool) {
+        this._pool = pool;
+        return this;
+    }
+    
+    @JSONField(name = "id")
     public String getId() {
         return this._id;
     }
 
-    public File getFile() {
-        return this._file;
+    @JSONField(name = "downloadedFile")
+    public String getDownloadedFile() {
+        try {
+            return this._file.getCanonicalPath();
+        } catch (IOException e) {
+            return null;
+        }
     }
-
+    
+    @JSONField(name="uri")
+    @Override
     public URI getUri() {
         return this._uri;
     }
 
+    @JSONField(name="downloadedSize")
+    @Override
     public int getDownloadedSize() {
         return this._downloadedSize;
     }
 
-    private int addDownloadedSize(final int bytesAdded) {
-        this._downloadedSize += bytesAdded;
-        return bytesAdded;
-    }
-    
-    public String getETag() {
+    @JSONField(name="etag")
+    @Override
+    public String getEtag() {
         return this._etag;
     }
-
+    
+    @JSONField(serialize=false)
+    @Override
     public boolean isPartialDownload() {
         return this._downloadedSize > 0;
     }
     
+    @JSONField(serialize=false)
+    public File getFile() {
+        return this._file;
+    }
+
     @Override
     public int appendDownloadedContent(final Blob contentBlob) {
         validDownloadedFile();
@@ -77,9 +120,11 @@ public class FileDownload implements Downloadable {
         }
     }
 
-    /**
-     * 
-     */
+    private int addDownloadedSize(final int bytesAdded) {
+        this._downloadedSize += bytesAdded;
+        return bytesAdded;
+    }
+    
     private void validDownloadedFile() {
         if ( null == this._output ) {
             this._output = safeInitDownloadedFile();
@@ -100,10 +145,10 @@ public class FileDownload implements Downloadable {
     
     @Override
     public void updateResponse(final HttpResponse response) {
-        
+        this._etag = response.headers().get(HttpHeaders.ETAG);
     }
 
-    private final BytesPool _pool;
+    private BytesPool _pool;
     
     private final String _id;
     
