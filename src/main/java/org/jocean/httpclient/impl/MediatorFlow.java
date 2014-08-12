@@ -59,19 +59,153 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
         return flow.queryInterfaceInstance(Guide.class);
     }
     
-    final public BizStep DISPATCH = new BizStep(
-        "httpmediator.DISPATCH")
-        .handler(selfInvoker("doProcessPendingGuides"))
-        .handler(selfInvoker("onGuideAtPending"))
-        .handler(selfInvoker("onGuideEnd"))
-        .handler(selfInvoker("onChannelAtIdle"))
-        .handler(selfInvoker("onChannelNolongerIdle"))
-        .handler(selfInvoker("onChannelAtBinded"))
-        .handler(selfInvoker("onChannelNolongerBinded"))
-        .handler(selfInvoker("onChannelAtInactive"))
-        .handler(selfInvoker("onChannelNolongerInactive"))
+    final public BizStep DISPATCH = new BizStep("httpmediator.DISPATCH")
+        .handler(handlersOf(this))
         .freeze();
 
+    @OnEvent(event = PROCESS_PENDING_GUIDES)
+    private BizStep doProcessPendingGuides() {
+        if ( LOG.isDebugEnabled() ) {
+            LOG.debug("doCheckPendings when _pendingGuides's size:({})", this._pendingGuides.size());
+        }
+        
+        this._processPendingGuides.set(false);
+        
+        int succeedCount = 0;
+        int failedCount = 0;
+        int skipedCount = 0;
+        
+        while ( !this._pendingGuides.isEmpty() ) {
+            final GuideFlow guideFlow = this._pendingGuides.poll();
+            if ( null != guideFlow ) {
+                if ( obtainHttpChannelForGuide(guideFlow) ) {
+                    if ( LOG.isTraceEnabled() ) {
+                        LOG.trace("obtain HttpChannel: for GuideFlow({}) succeed.", guideFlow);
+                    }
+                    succeedCount++;
+                }
+                else {
+                    if ( LOG.isTraceEnabled() ) {
+                        LOG.trace("obtain HttpChannel: for GuideFlow({}) failed.", guideFlow);
+                    }
+                    skipedCount = this._pendingGuides.size();
+                    this._pendingGuides.add(guideFlow);
+                    failedCount++;
+                    break;
+                }
+            }
+        }
+        if ( LOG.isDebugEnabled() ) {
+            LOG.debug("doCheckPendings result, succeed:{}/failed:{}/skipped:{}", 
+                    succeedCount, failedCount, skipedCount);
+        }
+        return this.currentEventHandler();
+    }
+    
+    @OnEvent(event = "publishGuideAtPending")
+    private BizStep onGuideAtPending(final GuideFlow flow) {
+        if ( !this._pendingGuides.contains(flow) ) {
+            if ( this._pendingGuides.add(flow) ) {
+                if ( LOG.isTraceEnabled() ) {
+                    LOG.trace("Pendings: add GuideFlow({}) to pending queue succeed", flow);
+                }
+                launchProcessPendingGuides();
+            }
+            else {
+                if ( LOG.isTraceEnabled() ) {
+                    LOG.trace("Pendings: add GuideFlow({}) to pending queue failed", flow);
+                }
+            }
+        }
+        
+        return this.currentEventHandler();
+    }
+
+    @OnEvent(event = "publishGuideEnd")
+    private BizStep onGuideEnd(final GuideFlow flow) {
+        if ( this._pendingGuides.remove(flow) ) {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("Pendings: remove GuideFlow({}) from pending queue succeed", flow);
+            }
+        }
+        else {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("Pendings: remove GuideFlow({}) from pending queue failed", flow);
+            }
+        }
+        
+        return this.currentEventHandler();
+    }
+    
+    @OnEvent(event = "publishChannelAtIdle")
+    private BizStep onChannelAtIdle(final URI domain, final ChannelFlow channelFlow) {
+        if ( getOrCreateIdleChannelPool(domain).add(channelFlow) ) {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("HttpChannels: add ChannelFlow({}) to idle set succeed", channelFlow);
+            }
+            launchProcessPendingGuides();
+        }
+        else {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("HttpChannels: add ChannelFlow({}) to idle set succeed", channelFlow);
+            }
+        }
+        
+        return this.currentEventHandler();
+    }
+
+    @OnEvent(event = "publishChannelNolongerIdle")
+    private BizStep onChannelNolongerIdle(final URI domain, final ChannelFlow channelFlow) {
+        removeChannelFromIdles(domain, channelFlow);
+        return this.currentEventHandler();
+    }
+
+    @OnEvent(event = "publishChannelAtBinded")
+    private BizStep onChannelAtBinded(final ChannelFlow channelFlow) {
+        if ( !this._bindedChannelRequirements.contains(channelFlow.bindedRequirement())) {
+            if ( this._bindedChannelRequirements.add(channelFlow.bindedRequirement()) ) {
+                if ( LOG.isTraceEnabled() ) {
+                    LOG.trace("HttpChannels: add ChannelFlow({}) to binded queue succeed", channelFlow);
+                }
+                launchProcessPendingGuides();
+            }
+            else {
+                if ( LOG.isTraceEnabled() ) {
+                    LOG.trace("HttpChannels: add ChannelFlow({}) to binded queue failed", channelFlow);
+                }
+            }
+        }
+        return this.currentEventHandler();
+    }
+
+    @OnEvent(event = "publishChannelNolongerBinded")
+    private BizStep onChannelNolongerBinded(final ChannelFlow channelFlow) {
+        removeChannelFromBindeds(channelFlow);
+        return this.currentEventHandler();
+    }
+    
+    @OnEvent(event = "publishChannelAtInactive")
+    private BizStep onChannelAtInactive(final ChannelFlow channelFlow) {
+        if ( this._inactiveChannels.add(channelFlow) ) {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("HttpChannels: add ChannelFlow({}) to inactive set succeed", channelFlow);
+            }
+            launchProcessPendingGuides();
+        }
+        else {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("HttpChannels: add ChannelFlow({}) to inactive set failed", channelFlow);
+            }
+        }
+        return this.currentEventHandler();
+    }
+
+    @OnEvent(event = "publishChannelNolongerInactive")
+    private BizStep onChannelNolongerInactive(final ChannelFlow channelFlow) {
+        removeChannelFromInactives(channelFlow);
+        return this.currentEventHandler();
+    }
+    
     private static boolean canInterruptLowPriority(final int highPriority) {
         return (highPriority >= 0);
     }
@@ -124,45 +258,6 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
         }
     }
     
-    @OnEvent(event = PROCESS_PENDING_GUIDES)
-    private BizStep doProcessPendingGuides() {
-        if ( LOG.isDebugEnabled() ) {
-            LOG.debug("doCheckPendings when _pendingGuides's size:({})", this._pendingGuides.size());
-        }
-        
-        this._processPendingGuides.set(false);
-        
-        int succeedCount = 0;
-        int failedCount = 0;
-        int skipedCount = 0;
-        
-        while ( !this._pendingGuides.isEmpty() ) {
-            final GuideFlow guideFlow = this._pendingGuides.poll();
-            if ( null != guideFlow ) {
-                if ( obtainHttpChannelForGuide(guideFlow) ) {
-                    if ( LOG.isTraceEnabled() ) {
-                        LOG.trace("obtain HttpChannel: for GuideFlow({}) succeed.", guideFlow);
-                    }
-                    succeedCount++;
-                }
-                else {
-                    if ( LOG.isTraceEnabled() ) {
-                        LOG.trace("obtain HttpChannel: for GuideFlow({}) failed.", guideFlow);
-                    }
-                    skipedCount = this._pendingGuides.size();
-                    this._pendingGuides.add(guideFlow);
-                    failedCount++;
-                    break;
-                }
-            }
-        }
-        if ( LOG.isDebugEnabled() ) {
-            LOG.debug("doCheckPendings result, succeed:{}/failed:{}/skipped:{}", 
-                    succeedCount, failedCount, skipedCount);
-        }
-        return this.currentEventHandler();
-    }
-
     private boolean obtainHttpChannelForGuide(final GuideFlow guideFlow) {
         if ( LOG.isTraceEnabled()) {
             LOG.trace("try to launch pending GuideFlow({})", guideFlow);
@@ -370,41 +465,6 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
         }
     }
     
-    @OnEvent(event = "publishGuideAtPending")
-    private BizStep onGuideAtPending(final GuideFlow flow) {
-        if ( !this._pendingGuides.contains(flow) ) {
-            if ( this._pendingGuides.add(flow) ) {
-                if ( LOG.isTraceEnabled() ) {
-                    LOG.trace("Pendings: add GuideFlow({}) to pending queue succeed", flow);
-                }
-                launchProcessPendingGuides();
-            }
-            else {
-                if ( LOG.isTraceEnabled() ) {
-                    LOG.trace("Pendings: add GuideFlow({}) to pending queue failed", flow);
-                }
-            }
-        }
-        
-        return this.currentEventHandler();
-    }
-
-    @OnEvent(event = "publishGuideEnd")
-    private BizStep onGuideEnd(final GuideFlow flow) {
-        if ( this._pendingGuides.remove(flow) ) {
-            if ( LOG.isTraceEnabled() ) {
-                LOG.trace("Pendings: remove GuideFlow({}) from pending queue succeed", flow);
-            }
-        }
-        else {
-            if ( LOG.isTraceEnabled() ) {
-                LOG.trace("Pendings: remove GuideFlow({}) from pending queue failed", flow);
-            }
-        }
-        
-        return this.currentEventHandler();
-    }
-
     private void removeChannelFromIdles(final URI domain, final ChannelFlow channelFlow) {
         final Set<ChannelFlow> pool = getIdleChannelPool(domain);
         if ( null != pool ) {
@@ -444,75 +504,6 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
                 LOG.trace("HttpChannels: remove ChannelFlow({}) from inactive set failed", channelFlow);
             }
         }
-        return this.currentEventHandler();
-    }
-    
-    @OnEvent(event = "publishChannelAtIdle")
-    private BizStep onChannelAtIdle(final URI domain, final ChannelFlow channelFlow) {
-        if ( getOrCreateIdleChannelPool(domain).add(channelFlow) ) {
-            if ( LOG.isTraceEnabled() ) {
-                LOG.trace("HttpChannels: add ChannelFlow({}) to idle set succeed", channelFlow);
-            }
-            launchProcessPendingGuides();
-        }
-        else {
-            if ( LOG.isTraceEnabled() ) {
-                LOG.trace("HttpChannels: add ChannelFlow({}) to idle set succeed", channelFlow);
-            }
-        }
-        
-        return this.currentEventHandler();
-    }
-
-    @OnEvent(event = "publishChannelNolongerIdle")
-    private BizStep onChannelNolongerIdle(final URI domain, final ChannelFlow channelFlow) {
-        removeChannelFromIdles(domain, channelFlow);
-        return this.currentEventHandler();
-    }
-
-    @OnEvent(event = "publishChannelAtBinded")
-    private BizStep onChannelAtBinded(final ChannelFlow channelFlow) {
-        if ( !this._bindedChannelRequirements.contains(channelFlow.bindedRequirement())) {
-            if ( this._bindedChannelRequirements.add(channelFlow.bindedRequirement()) ) {
-                if ( LOG.isTraceEnabled() ) {
-                    LOG.trace("HttpChannels: add ChannelFlow({}) to binded queue succeed", channelFlow);
-                }
-                launchProcessPendingGuides();
-            }
-            else {
-                if ( LOG.isTraceEnabled() ) {
-                    LOG.trace("HttpChannels: add ChannelFlow({}) to binded queue failed", channelFlow);
-                }
-            }
-        }
-        return this.currentEventHandler();
-    }
-
-    @OnEvent(event = "publishChannelNolongerBinded")
-    private BizStep onChannelNolongerBinded(final ChannelFlow channelFlow) {
-        removeChannelFromBindeds(channelFlow);
-        return this.currentEventHandler();
-    }
-    
-    @OnEvent(event = "publishChannelAtInactive")
-    private BizStep onChannelAtInactive(final ChannelFlow channelFlow) {
-        if ( this._inactiveChannels.add(channelFlow) ) {
-            if ( LOG.isTraceEnabled() ) {
-                LOG.trace("HttpChannels: add ChannelFlow({}) to inactive set succeed", channelFlow);
-            }
-            launchProcessPendingGuides();
-        }
-        else {
-            if ( LOG.isTraceEnabled() ) {
-                LOG.trace("HttpChannels: add ChannelFlow({}) to inactive set failed", channelFlow);
-            }
-        }
-        return this.currentEventHandler();
-    }
-
-    @OnEvent(event = "publishChannelNolongerInactive")
-    private BizStep onChannelNolongerInactive(final ChannelFlow channelFlow) {
-        removeChannelFromInactives(channelFlow);
         return this.currentEventHandler();
     }
     

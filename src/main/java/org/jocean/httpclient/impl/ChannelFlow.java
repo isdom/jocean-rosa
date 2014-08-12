@@ -74,475 +74,463 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     public ArgsHandler getArgsHandler() {
         return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
     }
-    
-    final BizStep INACTIVE = new BizStep(
-            "httpchannel.INACTIVE")
-            .handler(selfInvoker("inactiveOnBindWithGuide"))
-            .handler(selfInvoker("inactiveOnPublishState"))
-            .freeze();
 
-    private final BizStep BINDED_CONNECTING = new BizStep(
-            "httpchannel.BINDED_CONNECTING")
-            .handler(selfInvoker("bindedConnectingOnBindWithGuide"))
-            .handler(selfInvoker("bindedConnectingOnBindingAbort"))
-            .handler(selfInvoker("bindedOnChannelConnectComplete"))
-            .handler(selfInvoker("bindedConnectingOnActive"))
-            .handler(selfInvoker("bindedConnectingOnDetach"))
-            .handler(selfInvoker("bindedOnPublishState"))
-            .freeze();
-
-    private final BizStep BINDED_ACTIVED = new BizStep(
-            "httpchannel.BINDED_ACTIVED")
-            .handler(selfInvoker("bindedActivedOnBindWithGuide"))
-            .handler(selfInvoker("bindedActivedOnBindingAbort"))
-            .handler(selfInvoker("bindedOnInactive"))
-            .handler(selfInvoker("bindedSendHttpRequest"))
-            .handler(selfInvoker("bindedActivedOnDetach"))
-            .handler(selfInvoker("bindedOnPublishState"))
-            .freeze();
-
-    private final BizStep BINDED_TRANSACTING = new BizStep(
-            "httpchannel.BINDED_TRANSACTING")
-            .handler(selfInvoker("bindedTransactingOnBindWithGuide"))
-            .handler(selfInvoker("bindedOnInactive"))
-            .handler(selfInvoker("bindedResponseReceived"))
-            .handler(selfInvoker("bindedContentReceived"))
-            .handler(selfInvoker("bindedLastContentReceived"))
-            .handler(selfInvoker("bindedTransactingOnDetach"))
-            .handler(selfInvoker("bindedOnPublishState"))
-            .freeze();
-
-    private final BizStep IDLE_CONNECTING = new BizStep(
-            "httpchannel.IDLE_CONNECTING")
-            .handler(selfInvoker("idleOnChannelConnectComplete"))
-            .handler(selfInvoker("idleConnectingOnBindWithGuide"))
-            .handler(selfInvoker("idleConnectingOnActive"))
-            .handler(selfInvoker("idleOnPublishState"))
-            .freeze();
-
-    private final BizStep IDLE_ACTIVED = new BizStep(
-            "httpchannel.IDLE_ACTIVED")
-            .handler(selfInvoker("idleActivedOnBindWithGuide"))
-            .handler(selfInvoker("idleActivedOnInactive"))
-            .handler(selfInvoker("idleOnPublishState"))
-            .freeze();
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-    private BizStep inactiveOnPublishState() {
-        this._publisher.publishChannelAtInactive(this);
-        return this.currentEventHandler();
-    }
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-    private BizStep bindedOnPublishState() {
-        this._publisher.publishChannelAtBinded(this);
-        return this.currentEventHandler();
-    }
-    
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-    private BizStep idleOnPublishState() {
-        this._publisher.publishChannelAtIdle(this._domain, this);
-        return this.currentEventHandler();
-    }
-    
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-    private BizStep inactiveOnBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
-            throws Exception {
-        notifyGuideForBinded(guideReceiver);
-        createChannelAndConnectBy(guideReceiver, requirement);
-        this._publisher.publishChannelNolongerInactive(this);
-        this._publisher.publishChannelAtBinded(this);
-
-        return this.BINDED_CONNECTING;
-    }
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-    private BizStep bindedConnectingOnBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
-            throws Exception {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
-                    this, currentEventHandler().getName(), currentEvent(),
-                    this._guideReceiver, guideReceiver);
+    private class BindedBizStep extends BizStep {
+        public BindedBizStep(final String name) {
+            super(name);
         }
-        
-        notifyGuideForChannelLostAndUnbind();
-        notifyGuideForBinded(guideReceiver);
-        
-        final URI toBindedDomain = this._toolkit.genDomainByURI(requirement.uri());
-        if (isCurrentDomainEquals( toBindedDomain )) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
+
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
+        private BizStep onPublishState() {
+            _publisher.publishChannelAtBinded(ChannelFlow.this);
+            return currentEventHandler();
+        }
+    }
+
+    private class BindedBizStepOnInactive extends BindedBizStep {
+        public BindedBizStepOnInactive(final String name) {
+            super(name);
+        }
+
+        @OnEvent(event = NettyEvents.CHANNEL_INACTIVE)
+        private BizStep onInactive(final ChannelHandlerContext ctx)
+                throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("channel for {} closed.", _uri);
             }
-            updateBindedGuideFlow(guideReceiver, requirement);
-            this._publisher.publishChannelAtBinded(this);
-            return currentEventHandler();
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
-            }
-            // close detach previous channel and re-try
-            closeAndDetachCurrentChannel();
-            createChannelAndConnectBy(guideReceiver, requirement);
-            this._publisher.publishChannelAtBinded(this);
-            return this.BINDED_CONNECTING;
-        }
-    }
-
-    @OnEvent(event = NOTIFY_CHANNEL_FOR_BINDING_ABORT)
-    private BizStep bindedConnectingOnBindingAbort(final int guideBindingId) {
-        if (!isValidGuideBindingId(guideBindingId)) {
-            return currentEventHandler();
-        }
-        resetBindedGuideFlow();
-        this._publisher.publishChannelNolongerBinded(this);
-        this._publisher.publishChannelAtIdle(this._domain, this);
-        return this.IDLE_CONNECTING;
-    }
-
-    @OnEvent(event = "operationComplete")
-    private BizStep bindedOnChannelConnectComplete(
-            final ChannelFuture future) throws Exception {
-        if (!isCurrentChannelResult(future)) {
-            LOG.warn("bindedOnChannelConnectComplete: current uri:{} receive !NOT! current connect result for channel({}",
-                    this._uri, future.channel());
-            // just ignore
-            return currentEventHandler();
-        }
-        if (!future.isSuccess()) {
-            // future.isSuccess() will handle by
-            // NettyEvents.CHANNEL_ACTIVE event
-            // so just handle failed case
-            LOG.warn("uri:{}'s channel({}) connect failed, detail: {}", 
-                    this._uri, this._channel, ExceptionUtils.exception2detail( future.cause()));
             notifyGuideForChannelLostAndUnbind();
             resetBindedGuideFlow();
-            this._publisher.publishChannelNolongerBinded(this);
-            this._publisher.publishChannelAtInactive(this);
-            return this.INACTIVE;
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("connect to uri:{} succeed", this._uri);
-            }
+            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+            _publisher.publishChannelAtInactive(ChannelFlow.this);
+            return INACTIVE;
+        }
+    }
+
+    private class IdleBizStep extends BizStep {
+        public IdleBizStep(final String name) {
+            super(name);
+        }
+
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
+        private BizStep onPublishState() {
+            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
             return currentEventHandler();
-        }
-    }
-
-    @OnEvent(event = NettyEvents.CHANNEL_ACTIVE)
-    private BizStep bindedConnectingOnActive(
-            final ChannelHandlerContext ctx) throws Exception {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("channelFlow({})/{}/{} Actived by channel({})",
-                    this, currentEventHandler().getName(), currentEvent(), ctx.channel());
-        }
-        notifyGuideForHttpClientObtained();
-        return this.BINDED_ACTIVED;
-    }
-
-    @OnEvent(event = "detach")
-    private BizStep bindedConnectingOnDetach(final int guideBindingId) {
-        if (!isValidGuideBindingId(guideBindingId)) {
-            return currentEventHandler();
-        }
-
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("ChannelFlow({}) has been detach.", this);
-        }
-        resetBindedGuideFlow();
-        this._publisher.publishChannelNolongerBinded(this);
-        this._publisher.publishChannelAtIdle(this._domain, this);
-        return this.IDLE_CONNECTING;
-    }
-
-    @OnEvent(event = NettyEvents.CHANNEL_INACTIVE)
-    private BizStep bindedOnInactive(final ChannelHandlerContext ctx)
-            throws Exception {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("channel for {} closed.", this._uri);
-        }
-        notifyGuideForChannelLostAndUnbind();
-        resetBindedGuideFlow();
-        this._publisher.publishChannelNolongerBinded(this);
-        this._publisher.publishChannelAtInactive(this);
-        return this.INACTIVE;
-    }
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-    private BizStep bindedActivedOnBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
-            throws Exception {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
-                    this, currentEventHandler().getName(), currentEvent(),
-                    this._guideReceiver, guideReceiver);
-        }
-        
-        notifyGuideForChannelLostAndUnbind();
-        notifyGuideForBinded(guideReceiver);
-        
-        final URI toBindedDomain = this._toolkit.genDomainByURI(requirement.uri());
-        if (isCurrentDomainEquals( toBindedDomain )) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
-            }
-            updateBindedGuideFlow(guideReceiver, requirement);
-            notifyGuideForHttpClientObtained();
-            this._publisher.publishChannelAtBinded(this);
-            return currentEventHandler();
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
-            }
-            // close detach previous channel and re-try
-            closeAndDetachCurrentChannel();
-            createChannelAndConnectBy(guideReceiver, requirement);
-            this._publisher.publishChannelAtBinded(this);
-            return this.BINDED_CONNECTING;
         }
     }
     
-    @OnEvent(event = NOTIFY_CHANNEL_FOR_BINDING_ABORT)
-    private BizStep bindedActivedOnBindingAbort(final int guideBindingId) {
-        if (!isValidGuideBindingId(guideBindingId)) {
-            return currentEventHandler();
-        }
-        resetBindedGuideFlow();
-        this._publisher.publishChannelNolongerBinded(this);
-        this._publisher.publishChannelAtIdle(this._domain, this);
-        return this.IDLE_ACTIVED;
-    }
-
-    @OnEvent(event = "detach")
-    private BizStep bindedActivedOnDetach(final int guideBindingId) {
-        if (!isValidGuideBindingId(guideBindingId)) {
-            return currentEventHandler();
-        }
-        
-        resetBindedGuideFlow();
-        this._publisher.publishChannelNolongerBinded(this);
-        this._publisher.publishChannelAtIdle(this._domain, this);
-        return this.IDLE_ACTIVED;
-    }
-
-    @OnEvent(event = "sendHttpRequest")
-    private BizStep bindedSendHttpRequest(
-            final int currentHttpClientId,
-            final Object userCtx, 
-            final HttpRequest request,
-            final HttpReactor<Object> reactor
-            ) {
-        if ( !isValidHttpClientId(currentHttpClientId) ) {
-            return currentEventHandler();
-        }
-        this._userCtx = userCtx;
-        this._httpReactor = reactor;
-        
-        request.headers().set(HttpHeaders.Names.CONNECTION,
-                HttpHeaders.Values.KEEP_ALIVE);
-        this._channel.writeAndFlush(request);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("({})/{}/{}: sendHttpRequest: {}", this, currentEventHandler()
-                    .getName(), currentEvent(), request);
-        }
-        return this.BINDED_TRANSACTING;
-    }
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-    private BizStep bindedTransactingOnBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
-            throws Exception {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug(
-                    "channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
-                    this, currentEventHandler().getName(), currentEvent(),
-                    this._guideReceiver, guideReceiver);
-        }
-
-        notifyGuideForChannelLostAndUnbind();
-
-        resetBindedGuideFlow();
-        notifyGuideForBinded(guideReceiver);
-
-        // close detach previous channel and re-try
-        closeAndDetachCurrentChannel();
-        createChannelAndConnectBy(guideReceiver, requirement);
-        this._publisher.publishChannelAtBinded(this);
-
-        return this.BINDED_CONNECTING;
-    }
-    
-    @OnEvent(event = HttpEvents.HTTPRESPONSERECEIVED)
-    private BizStep bindedResponseReceived(
-            final ChannelHandlerContext ctx, final HttpResponse response) {
-        if (null != this._httpReactor) {
-            try {
-                this._httpReactor.onHttpResponseReceived(this._userCtx, response);
-            } catch (Throwable e) {
-                LOG.warn("exception when invoke uri({})/ctx({})'s onHttpResponseReceived, detail:{}",
-                        this._uri, this._userCtx, ExceptionUtils.exception2detail(e));
-            }
-        } else {
-            LOG.warn("uri:{} response received with internal error bcs non-reactor",
-                    this._uri);
-        }
-
-        if (!HttpUtils.isHttpResponseHasMoreContent(response)) {
-            return this.BINDED_ACTIVED;
-        } else {
-            return currentEventHandler();
-        }
-    }
-
-    @OnEvent(event = HttpEvents.HTTPCONTENTRECEIVED)
-    private BizStep bindedContentReceived(final ChannelHandlerContext ctx,
-            final Blob blob) {
-        if (null != this._httpReactor) {
-            try {
-                this._httpReactor.onHttpContentReceived(this._userCtx, blob);
-            } catch (Throwable e) {
-                LOG.warn("exception when invoke uri({})/ctx({})'s onHttpContentReceived, detail:{}",
-                        this._uri, this._userCtx, ExceptionUtils.exception2detail(e));
-            }
-        } else {
-            LOG.warn("uri:{} content received with internal error bcs non-reactor",
-                    this._uri);
-        }
-
-        return currentEventHandler();
-    }
-
-    @OnEvent(event = HttpEvents.LASTHTTPCONTENTRECEIVED)
-    private BizStep bindedLastContentReceived(
-            final ChannelHandlerContext ctx, final Blob blob)
-            throws Exception {
-        if (null != this._httpReactor) {
-            try {
-                this._httpReactor.onLastHttpContentReceived(this._userCtx, blob);
-            } catch (Throwable e) {
-                LOG.warn("exception when invoke uri({})/ctx({})'s onLastHttpContentReceived, detail:{}",
-                        this._uri, this._userCtx, ExceptionUtils.exception2detail(e));
-            }
-        } else {
-            LOG.warn("uri:{} last content received with internal error bcs non-reactor",
-                    this._uri);
-        }
-
-        return this.BINDED_ACTIVED;
-    }
-
-    @OnEvent(event = "detach")
-    private BizStep bindedTransactingOnDetach(final int guideBindingId) {
-        if (!isValidGuideBindingId(guideBindingId)) {
-            return currentEventHandler();
-        }
-        
-        closeAndDetachCurrentChannel();
-        resetBindedGuideFlow();
-        this._publisher.publishChannelNolongerBinded(this);
-        this._publisher.publishChannelAtInactive(this);
-        return this.INACTIVE;
-    }
-
-    @OnEvent(event = "operationComplete")
-    private BizStep idleOnChannelConnectComplete(
-            final ChannelFuture future) {
-        if (!isCurrentChannelResult(future)) {
-            LOG.warn("idleOnChannelConnectComplete: domain:{} receive !NOT! current connect result for channel({}",
-                    this._domain, future.channel());
-            // just ignore
-            return currentEventHandler();
-        }
-        if (!future.isSuccess()) {
-            // future.isSuccess() will handle by
-            // NettyEvents.CHANNEL_ACTIVE event
-            // so just handle failed case
-            LOG.warn("uri:{}'s channel({}) connect failed, detail: {}", 
-                    this._uri, this._channel, 
-                    ExceptionUtils.exception2detail( future.cause()));
-            this._publisher.publishChannelNolongerIdle(this._domain, this);
-            this._publisher.publishChannelAtInactive(this);
-            return this.INACTIVE;
-        } else {
-            return currentEventHandler();
-        }
-    }
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-    private BizStep idleConnectingOnBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
-            throws Exception {
-        notifyGuideForBinded(guideReceiver);
-        final URI toBindedDomain = this._toolkit.genDomainByURI(requirement.uri());
-        if (isCurrentDomainEquals( toBindedDomain )) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
-            }
-            updateBindedGuideFlow(guideReceiver, requirement);
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
-            }
-            // close detach previous channel and re-try
-            closeAndDetachCurrentChannel();
+    final BizStep INACTIVE = new BizStep("httpchannel.INACTIVE") {
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
+        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+                throws Exception {
+            notifyGuideForBinded(guideReceiver);
             createChannelAndConnectBy(guideReceiver, requirement);
+            _publisher.publishChannelNolongerInactive(ChannelFlow.this);
+            _publisher.publishChannelAtBinded(ChannelFlow.this);
+
+            return BINDED_CONNECTING;
         }
-        this._publisher.publishChannelNolongerIdle(this._domain, this);
-        this._publisher.publishChannelAtBinded(this);
-        return this.BINDED_CONNECTING;
+        
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
+        private BizStep onPublishState() {
+            _publisher.publishChannelAtInactive(ChannelFlow.this);
+            return currentEventHandler();
+        }
     }
+    .freeze();
 
-    @OnEvent(event = NettyEvents.CHANNEL_ACTIVE)
-    private BizStep idleConnectingOnActive(final ChannelHandlerContext ctx) {
-        return this.IDLE_ACTIVED;
-    }
-
-    @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-    private BizStep idleActivedOnBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
-            throws Exception {
-        this._publisher.publishChannelNolongerIdle(this._domain, this);
-        notifyGuideForBinded(guideReceiver);
-        final URI toBindedDomain = this._toolkit.genDomainByURI(requirement.uri());
-        if (isCurrentDomainEquals( toBindedDomain )) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
+    private final BizStep BINDED_CONNECTING = new BindedBizStep("httpchannel.BINDED_CONNECTING") {
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
+        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+                throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                        _guideReceiver, guideReceiver);
             }
-            updateBindedGuideFlow(guideReceiver, requirement);
+            
+            notifyGuideForChannelLostAndUnbind();
+            notifyGuideForBinded(guideReceiver);
+            
+            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
+            if (isCurrentDomainEquals( toBindedDomain )) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                            this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                updateBindedGuideFlow(guideReceiver, requirement);
+                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                return currentEventHandler();
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                            this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                // close detach previous channel and re-try
+                closeAndDetachCurrentChannel();
+                createChannelAndConnectBy(guideReceiver, requirement);
+                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                return BINDED_CONNECTING;
+            }
+        }
+        
+        @OnEvent(event = NOTIFY_CHANNEL_FOR_BINDING_ABORT)
+        private BizStep onBindingAbort(final int guideBindingId) {
+            if (!isValidGuideBindingId(guideBindingId)) {
+                return currentEventHandler();
+            }
+            resetBindedGuideFlow();
+            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            return IDLE_CONNECTING;
+        }
+        
+        @OnEvent(event = "operationComplete")
+        private BizStep onChannelConnectComplete(
+                final ChannelFuture future) throws Exception {
+            if (!isCurrentChannelResult(future)) {
+                LOG.warn("bindedOnChannelConnectComplete: current uri:{} receive !NOT! current connect result for channel({}",
+                        _uri, future.channel());
+                // just ignore
+                return currentEventHandler();
+            }
+            if (!future.isSuccess()) {
+                // future.isSuccess() will handle by
+                // NettyEvents.CHANNEL_ACTIVE event
+                // so just handle failed case
+                LOG.warn("uri:{}'s channel({}) connect failed, detail: {}", 
+                        _uri, _channel, ExceptionUtils.exception2detail( future.cause()));
+                notifyGuideForChannelLostAndUnbind();
+                resetBindedGuideFlow();
+                _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+                _publisher.publishChannelAtInactive(ChannelFlow.this);
+                return INACTIVE;
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("connect to uri:{} succeed", _uri);
+                }
+                return currentEventHandler();
+            }
+        }
+        
+        @OnEvent(event = NettyEvents.CHANNEL_ACTIVE)
+        private BizStep onActive(
+                final ChannelHandlerContext ctx) throws Exception {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channelFlow({})/{}/{} Actived by channel({})",
+                        this, currentEventHandler().getName(), currentEvent(), ctx.channel());
+            }
             notifyGuideForHttpClientObtained();
-            this._publisher.publishChannelAtBinded(this);
-            return this.BINDED_ACTIVED;
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                        this, currentEventHandler().getName(), currentEvent(),
-                        toBindedDomain, this._channel);
+            return BINDED_ACTIVED;
+        }
+        
+        @OnEvent(event = "detach")
+        private BizStep onDetach(final int guideBindingId) {
+            if (!isValidGuideBindingId(guideBindingId)) {
+                return currentEventHandler();
             }
+
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("ChannelFlow({}) has been detach.", this);
+            }
+            resetBindedGuideFlow();
+            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            return IDLE_CONNECTING;
+        }
+    }
+    .freeze();
+
+    private final BizStep BINDED_ACTIVED = new BindedBizStepOnInactive("httpchannel.BINDED_ACTIVED") {
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
+        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+                throws Exception {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                        _guideReceiver, guideReceiver);
+            }
+            
+            notifyGuideForChannelLostAndUnbind();
+            notifyGuideForBinded(guideReceiver);
+            
+            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
+            if (isCurrentDomainEquals( toBindedDomain )) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                updateBindedGuideFlow(guideReceiver, requirement);
+                notifyGuideForHttpClientObtained();
+                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                return currentEventHandler();
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                            this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                // close detach previous channel and re-try
+                closeAndDetachCurrentChannel();
+                createChannelAndConnectBy(guideReceiver, requirement);
+                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                return BINDED_CONNECTING;
+            }
+        }
+        
+        @OnEvent(event = NOTIFY_CHANNEL_FOR_BINDING_ABORT)
+        private BizStep onBindingAbort(final int guideBindingId) {
+            if (!isValidGuideBindingId(guideBindingId)) {
+                return currentEventHandler();
+            }
+            resetBindedGuideFlow();
+            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            return IDLE_ACTIVED;
+        }
+        
+        @OnEvent(event = "sendHttpRequest")
+        private BizStep onSendHttpRequest(
+                final int currentHttpClientId,
+                final Object userCtx, 
+                final HttpRequest request,
+                final HttpReactor<Object> reactor
+                ) {
+            if ( !isValidHttpClientId(currentHttpClientId) ) {
+                return currentEventHandler();
+            }
+            _userCtx = userCtx;
+            _httpReactor = reactor;
+            
+            request.headers().set(HttpHeaders.Names.CONNECTION,
+                    HttpHeaders.Values.KEEP_ALIVE);
+            _channel.writeAndFlush(request);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("({})/{}/{}: sendHttpRequest: {}", 
+                        ChannelFlow.this, 
+                        currentEventHandler().getName(), 
+                        currentEvent(), 
+                        request);
+            }
+            return BINDED_TRANSACTING;
+        }
+        
+        @OnEvent(event = "detach")
+        private BizStep onDetach(final int guideBindingId) {
+            if (!isValidGuideBindingId(guideBindingId)) {
+                return currentEventHandler();
+            }
+            
+            resetBindedGuideFlow();
+            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            return IDLE_ACTIVED;
+        }
+    }
+    .freeze();
+
+    private final BizStep BINDED_TRANSACTING = new BindedBizStepOnInactive("httpchannel.BINDED_TRANSACTING") {
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
+        private BizStep onBindWithGuide(
+                final EventReceiver guideReceiver, final Requirement requirement)
+                throws Exception {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug(
+                        "channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                        _guideReceiver, guideReceiver);
+            }
+
+            notifyGuideForChannelLostAndUnbind();
+
+            resetBindedGuideFlow();
+            notifyGuideForBinded(guideReceiver);
+
             // close detach previous channel and re-try
             closeAndDetachCurrentChannel();
             createChannelAndConnectBy(guideReceiver, requirement);
-            this._publisher.publishChannelAtBinded(this);
-            return this.BINDED_CONNECTING;
-        }
-    }
+            _publisher.publishChannelAtBinded(ChannelFlow.this);
 
-    @OnEvent(event = NettyEvents.CHANNEL_INACTIVE)
-    private BizStep idleActivedOnInactive(final ChannelHandlerContext ctx) {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("IDLE channelFlow({}) closed.", this);
+            return BINDED_CONNECTING;
         }
-        this._publisher.publishChannelNolongerIdle(this._domain, this);
-        this._publisher.publishChannelAtInactive(this);
-        return this.INACTIVE;
+        
+        @OnEvent(event = HttpEvents.HTTPRESPONSERECEIVED)
+        private BizStep responseReceived(
+                final ChannelHandlerContext ctx, final HttpResponse response) {
+            if (null != _httpReactor) {
+                try {
+                    _httpReactor.onHttpResponseReceived(_userCtx, response);
+                } catch (Throwable e) {
+                    LOG.warn("exception when invoke uri({})/ctx({})'s onHttpResponseReceived, detail:{}",
+                            _uri, _userCtx, ExceptionUtils.exception2detail(e));
+                }
+            } else {
+                LOG.warn("uri:{} response received with internal error bcs non-reactor",
+                        _uri);
+            }
+
+            if (!HttpUtils.isHttpResponseHasMoreContent(response)) {
+                return BINDED_ACTIVED;
+            } else {
+                return currentEventHandler();
+            }
+        }
+        
+        @OnEvent(event = HttpEvents.HTTPCONTENTRECEIVED)
+        private BizStep contentReceived(final ChannelHandlerContext ctx,
+                final Blob blob) {
+            if (null != _httpReactor) {
+                try {
+                    _httpReactor.onHttpContentReceived(_userCtx, blob);
+                } catch (Throwable e) {
+                    LOG.warn("exception when invoke uri({})/ctx({})'s onHttpContentReceived, detail:{}",
+                            _uri, _userCtx, ExceptionUtils.exception2detail(e));
+                }
+            } else {
+                LOG.warn("uri:{} content received with internal error bcs non-reactor",
+                        _uri);
+            }
+
+            return currentEventHandler();
+        }
+        
+        @OnEvent(event = HttpEvents.LASTHTTPCONTENTRECEIVED)
+        private BizStep lastContentReceived(
+                final ChannelHandlerContext ctx, final Blob blob)
+                throws Exception {
+            if (null != _httpReactor) {
+                try {
+                    _httpReactor.onLastHttpContentReceived(_userCtx, blob);
+                } catch (Throwable e) {
+                    LOG.warn("exception when invoke uri({})/ctx({})'s onLastHttpContentReceived, detail:{}",
+                            _uri, _userCtx, ExceptionUtils.exception2detail(e));
+                }
+            } else {
+                LOG.warn("uri:{} last content received with internal error bcs non-reactor",
+                        _uri);
+            }
+
+            return BINDED_ACTIVED;
+        }
+        
+        @OnEvent(event = "detach")
+        private BizStep onDetach(final int guideBindingId) {
+            if (!isValidGuideBindingId(guideBindingId)) {
+                return currentEventHandler();
+            }
+            
+            closeAndDetachCurrentChannel();
+            resetBindedGuideFlow();
+            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
+            _publisher.publishChannelAtInactive(ChannelFlow.this);
+            return INACTIVE;
+        }
     }
+    .freeze();
+
+    private final BizStep IDLE_CONNECTING = new IdleBizStep("httpchannel.IDLE_CONNECTING") {
+        @OnEvent(event = "operationComplete")
+        private BizStep onChannelConnectComplete(
+                final ChannelFuture future) {
+            if (!isCurrentChannelResult(future)) {
+                LOG.warn("idleOnChannelConnectComplete: domain:{} receive !NOT! current connect result for channel({}",
+                        _domain, future.channel());
+                // just ignore
+                return currentEventHandler();
+            }
+            if (!future.isSuccess()) {
+                // future.isSuccess() will handle by
+                // NettyEvents.CHANNEL_ACTIVE event
+                // so just handle failed case
+                LOG.warn("uri:{}'s channel({}) connect failed, detail: {}", 
+                        _uri, _channel, 
+                        ExceptionUtils.exception2detail( future.cause()));
+                _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
+                _publisher.publishChannelAtInactive(ChannelFlow.this);
+                return INACTIVE;
+            } else {
+                return currentEventHandler();
+            }
+        }
+        
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
+        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+                throws Exception {
+            notifyGuideForBinded(guideReceiver);
+            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
+            if (isCurrentDomainEquals( toBindedDomain )) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                updateBindedGuideFlow(guideReceiver, requirement);
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                            this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                // close detach previous channel and re-try
+                closeAndDetachCurrentChannel();
+                createChannelAndConnectBy(guideReceiver, requirement);
+            }
+            _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
+            _publisher.publishChannelAtBinded(ChannelFlow.this);
+            return BINDED_CONNECTING;
+        }
+        
+        @OnEvent(event = NettyEvents.CHANNEL_ACTIVE)
+        private BizStep onActive(final ChannelHandlerContext ctx) {
+            return IDLE_ACTIVED;
+        }
+    }
+    .freeze();
+
+    private final BizStep IDLE_ACTIVED = new IdleBizStep("httpchannel.IDLE_ACTIVED") {
+        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
+        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+                throws Exception {
+            _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
+            notifyGuideForBinded(guideReceiver);
+            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
+            if (isCurrentDomainEquals( toBindedDomain )) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                            this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                updateBindedGuideFlow(guideReceiver, requirement);
+                notifyGuideForHttpClientObtained();
+                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                return BINDED_ACTIVED;
+            } else {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                            this, currentEventHandler().getName(), currentEvent(),
+                            toBindedDomain, _channel);
+                }
+                // close detach previous channel and re-try
+                closeAndDetachCurrentChannel();
+                createChannelAndConnectBy(guideReceiver, requirement);
+                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                return BINDED_CONNECTING;
+            }
+        }
+        
+        @OnEvent(event = NettyEvents.CHANNEL_INACTIVE)
+        private BizStep onInactive(final ChannelHandlerContext ctx) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("IDLE channelFlow({}) closed.", ChannelFlow.this);
+            }
+            _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
+            _publisher.publishChannelAtInactive(ChannelFlow.this);
+            return INACTIVE;
+        }
+    }
+    .freeze();
 
     @Override
     public EventReceiver selfEventReceiver() {

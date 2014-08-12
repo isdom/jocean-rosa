@@ -37,164 +37,150 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         this._publisher = publisher;
     }
     
-    final BizStep UNOBTAIN = new BizStep(
-            "httpguide.UNOBTAIN")
-            .handler(selfInvoker("unobtainOnDetach"))
-            .handler(selfInvoker("onObtainClient"))
-            .freeze();
-
-    private final BizStep PENDING = new BizStep(
-            "httpguide.PENDING")
-            .handler(selfInvoker("pendingOnDetach"))
-            .handler(selfInvoker("startBindToChannel"))
-            .freeze();
-
-    private final BizStep ATTACHING = new BizStep(
-            "httpguide.ATTACHING")
-            .handler(selfInvoker("attachingOnBindToChannelSucceed"))
-            .handler(selfInvoker("attachingOnBindToChannelAbort"))
-            .handler(selfInvoker("attachingOnDetach"))
-            .freeze();
-
-    private final BizStep ATTACHED = new BizStep(
-            "httpguide.ATTACHED")
-            .handler(selfInvoker("attachedOnHttpClientObtained"))
-            .handler(selfInvoker("attachedOnDetach"))
-            .handler(selfInvoker("attachedOnChannelLost"))
-            .freeze();
-    
-    @OnEvent(event = "detach")
-    private BizStep unobtainOnDetach() {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("guide(unobtain) has been released.");
-        }
-        return null;
-    }
-
-    @OnEvent(event = "obtainHttpClient")
-    private BizStep onObtainClient(
-            final Object userCtx, 
-            final GuideReactor<Object> guideReactor, 
-            final Requirement requirement) {
-        if ( null == requirement || null == guideReactor ) {
-            LOG.error("guideFlow({})/{}/{} invalid params, detail: Requirement:{} GuideReactor:{}", 
-                    this, currentEventHandler().getName(), currentEvent(), requirement, guideReactor);
-            throw new NullPointerException("Requirement and GuideReactor can't be null.");
-        }
-        this._userCtx = userCtx;
-        this._requirement = new HttpRequirementImpl<GuideFlow>(requirement, this);
-        this._guideReactor = guideReactor;
-        this._publisher.publishGuideAtPending(this);
-        return this.PENDING;
-    }
-
-    @OnEvent(event = "detach")
-    private BizStep pendingOnDetach() {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("guideFlow({})/{}/{} has been detached.", 
-                    this, currentEventHandler().getName(), currentEvent());
-        }
-        this._publisher.publishGuideEnd(this);
-        notifyHttpLost();
-        return null;
-    }
-
-    @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_CHANNEL_RESERVED)
-    private BizStep startBindToChannel(final EventReceiver channelEventReceiver) 
-            throws Exception {
-        if ( LOG.isTraceEnabled() ) {
-            LOG.trace("guideFlow({})/{}/{} start bind to channel:{}", 
-                    this, currentEventHandler().getName(), currentEvent(), channelEventReceiver );
+    final BizStep UNOBTAIN = new BizStep("httpguide.UNOBTAIN") {
+        @OnEvent(event = "detach")
+        private BizStep onDetach() {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guide(unobtain) has been released.");
+            }
+            return null;
         }
         
-        channelEventReceiver.acceptEvent(
-                new AbstractUnhandleAware(FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE) {
-                    @Override
-                    public void onEventUnhandle( final String event, final Object... args) 
-                            throws Exception {
-                        // means channel bind failed
-                        selfEventReceiver().acceptEvent(NOTIFY_GUIDE_FOR_BINDING_ABORT, channelEventReceiver);
-                    }},
-                this.selfEventReceiver(),
-                this._requirement);
+        @OnEvent(event = "obtainHttpClient")
+        private BizStep onObtainClient(
+                final Object userCtx, 
+                final GuideReactor<Object> guideReactor, 
+                final Requirement requirement) {
+            if ( null == requirement || null == guideReactor ) {
+                LOG.error("guideFlow({})/{}/{} invalid params, detail: Requirement:{} GuideReactor:{}", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent(), requirement, guideReactor);
+                throw new NullPointerException("Requirement and GuideReactor can't be null.");
+            }
+            _userCtx = userCtx;
+            _requirement = new HttpRequirementImpl<GuideFlow>(requirement, GuideFlow.this);
+            _guideReactor = guideReactor;
+            _publisher.publishGuideAtPending(GuideFlow.this);
+            return PENDING;
+        }
+    }
+    .freeze();
 
-        return ATTACHING;
-    }
+    private final BizStep PENDING = new BizStep("httpguide.PENDING") {
+        @OnEvent(event = "detach")
+        private BizStep onDetach() {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} has been detached.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent());
+            }
+            _publisher.publishGuideEnd(GuideFlow.this);
+            notifyHttpLost();
+            return null;
+        }
+        
+        @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_CHANNEL_RESERVED)
+        private BizStep startBindToChannel(final EventReceiver channelEventReceiver) 
+                throws Exception {
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("guideFlow({})/{}/{} start bind to channel:{}", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent(), channelEventReceiver );
+            }
+            
+            channelEventReceiver.acceptEvent(
+                    new AbstractUnhandleAware(FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE) {
+                        @Override
+                        public void onEventUnhandle( final String event, final Object... args) 
+                                throws Exception {
+                            // means channel bind failed
+                            selfEventReceiver().acceptEvent(NOTIFY_GUIDE_FOR_BINDING_ABORT, channelEventReceiver);
+                        }},
+                    selfEventReceiver(),
+                    _requirement);
 
-    @OnEvent(event = NOTIFY_GUIDE_FOR_BINDING_ABORT)
-    private BizStep attachingOnBindToChannelAbort(final EventReceiver channelEventReceiver) 
-            throws Exception {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("guideFlow({}) bind channel({}) failed. try to re-attach", 
-                    this, channelEventReceiver);
+            return ATTACHING;
         }
-        this._publisher.publishGuideAtPending(this);
-        return PENDING;
     }
-    
-    @OnEvent(event = "detach")
-    private BizStep attachingOnDetach() throws Exception {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("guideFlow({})/{}/{} has been detached.", 
-                    this, currentEventHandler().getName(), currentEvent());
-        }
-        return null;
-    }
+    .freeze();
 
-    @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_CHANNEL_BINDED)
-    private BizStep attachingOnBindToChannelSucceed(final EventReceiver channelEventReceiver, final Detachable detacher) 
-            throws Exception {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("guideFlow({})/{}/{} has attached channel ({}).", 
-                    this, currentEventHandler().getName(), currentEvent(), channelEventReceiver);
+    private final BizStep ATTACHING = new BizStep("httpguide.ATTACHING") {
+        @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_CHANNEL_BINDED)
+        private BizStep onBindToChannelSucceed(final EventReceiver channelEventReceiver, final Detachable detacher) 
+                throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} has attached channel ({}).", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent(), channelEventReceiver);
+            }
+            _channelReceiver = channelEventReceiver;
+            _channelDetacher = detacher;
+            return ATTACHED;
         }
-        this._channelReceiver = channelEventReceiver;
-        this._channelDetacher = detacher;
-        return this.ATTACHED;
+        
+        @OnEvent(event = NOTIFY_GUIDE_FOR_BINDING_ABORT)
+        private BizStep onBindToChannelAbort(final EventReceiver channelEventReceiver) 
+                throws Exception {
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("guideFlow({}) bind channel({}) failed. try to re-attach", 
+                        GuideFlow.this, channelEventReceiver);
+            }
+            _publisher.publishGuideAtPending(GuideFlow.this);
+            return PENDING;
+        }
+        
+        @OnEvent(event = "detach")
+        private BizStep onDetach() throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} has been detached.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent());
+            }
+            return null;
+        }
     }
-    
-    @OnEvent(event = "detach")
-    private BizStep attachedOnDetach() throws Exception {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("guideFlow({})/{}/{} has been detached.", 
-                    this, currentEventHandler().getName(), currentEvent());
+    .freeze();
+
+    private final BizStep ATTACHED = new BizStep("httpguide.ATTACHED") {
+        @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_HTTPCLIENT_OBTAINED)
+        private BizStep onHttpClientObtained(final HttpClient httpClient) throws Exception {
+            if (null != _guideReactor) {
+                try {
+                    _guideReactor.onHttpClientObtained(_userCtx, httpClient);
+                } catch (Throwable e) {
+                    LOG.warn("exception when invoke onHttpClientObtained, detail:{}",
+                            ExceptionUtils.exception2detail(e));
+                }
+            } 
+            else {
+                LOG.warn("OnHttpClientObtained with internal error bcs non-guide-receiver");
+            }
+            return currentEventHandler();
         }
-        try {
-            this._channelDetacher.detach();
-        }
-        catch (Throwable e) {
-            LOG.warn("exception when invoke _channelDetacher.detach, detail:{}",
-                    ExceptionUtils.exception2detail(e));
-        }
-        notifyHttpLost();
-        return null;
-    }
-    
-    @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_HTTPCLIENT_OBTAINED)
-    private BizStep attachedOnHttpClientObtained(final HttpClient httpClient) throws Exception {
-        if (null != this._guideReactor) {
+        
+        @OnEvent(event = "detach")
+        private BizStep onDetach() throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} has been detached.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent());
+            }
             try {
-                this._guideReactor.onHttpClientObtained(this._userCtx, httpClient);
-            } catch (Throwable e) {
-                LOG.warn("exception when invoke onHttpClientObtained, detail:{}",
+                _channelDetacher.detach();
+            }
+            catch (Throwable e) {
+                LOG.warn("exception when invoke _channelDetacher.detach, detail:{}",
                         ExceptionUtils.exception2detail(e));
             }
-        } 
-        else {
-            LOG.warn("OnHttpClientObtained with internal error bcs non-guide-receiver");
+            notifyHttpLost();
+            return null;
         }
-        return currentEventHandler();
-    }
-    
-    @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_CHANNEL_LOST)
-    private BizStep attachedOnChannelLost() throws Exception {
-        if (LOG.isTraceEnabled()) {
-            LOG.trace("guideFlow({})/{}/{} channel lost.", 
-                    this, currentEventHandler().getName(), currentEvent());
+        
+        @OnEvent(event = FlowEvents.NOTIFY_GUIDE_FOR_CHANNEL_LOST)
+        private BizStep onChannelLost() throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} channel lost.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent());
+            }
+            notifyHttpLost();
+            return null;
         }
-        notifyHttpLost();
-        return null;
     }
+    .freeze();
 
     private void notifyHttpLost() {
         if (null != this._guideReactor) {
