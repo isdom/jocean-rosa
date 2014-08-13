@@ -17,6 +17,7 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.pool.BytesPool;
+import org.jocean.rosa.spi.ObjectMemo;
 import org.jocean.rosa.spi.Downloadable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,6 +64,11 @@ public class FileDownload implements Downloadable {
     
     public FileDownload setPool(final BytesPool pool) {
         this._pool = pool;
+        return this;
+    }
+    
+    public FileDownload setMemo(final ObjectMemo memo) {
+        this._memo = memo;
         return this;
     }
     
@@ -119,6 +125,14 @@ public class FileDownload implements Downloadable {
             return 0;
         }
     }
+    
+    public void saveToMemo() {
+        this._memo.updateToMemo(this._uri.toASCIIString(), this);
+    }
+    
+    public void removeFromMemo() {
+        this._memo.removeFromMemo(this._uri.toASCIIString());
+    }
 
     private int addDownloadedSize(final int bytesAdded) {
         this._downloadedSize += bytesAdded;
@@ -148,13 +162,11 @@ public class FileDownload implements Downloadable {
         this._etag = response.headers().get(HttpHeaders.ETAG);
     }
 
-    private BytesPool _pool;
-    
     private final String _id;
     
     private final File _file;
     
-    private RandomAccessFile _output = null; 
+    private transient RandomAccessFile _output = null; 
     
     private final URI _uri;
     
@@ -162,6 +174,9 @@ public class FileDownload implements Downloadable {
     
     private String _etag;
     
+    private transient BytesPool _pool;
+    
+    private transient ObjectMemo _memo;
     /**
      * @param description
      */
@@ -186,7 +201,8 @@ public class FileDownload implements Downloadable {
 
     @Override
     public String toString() {
-        return "FileDownload [id=" + this._id + ", file=" + this._file
-                + ", uri=" + this._uri + "]";
+        return "FileDownload [_id=" + _id + ", _file=" + _file + ", _uri="
+                + _uri + ", _downloadedSize=" + _downloadedSize + ", _etag="
+                + _etag + "]";
     }
 }
