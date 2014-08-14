@@ -29,6 +29,7 @@ import javax.net.ssl.SSLEngine;
 
 import org.jocean.event.api.EventReceiver;
 import org.jocean.idiom.Detachable;
+import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
@@ -48,6 +49,31 @@ public class HttpUtils {
 	private static final Logger LOG =
 			LoggerFactory.getLogger(HttpUtils.class);
 	
+	// return downloadable content's total length 
+	// (NOTE: 在断点续传的情况下 内容总长度不是本次传输长度而是包含已下载部分的内容总长度 )
+	// 返回值 可以为null
+	public static String getContentTotalLengthFromResponse(final HttpResponse response) {
+        final String contentRange = response.headers().get(HttpHeaders.Names.CONTENT_RANGE);
+        if ( null != contentRange ) {
+            return getPartialTotalFromContentRange(contentRange);
+        }
+        else {
+            return response.headers().get(HttpHeaders.Names.CONTENT_LENGTH);
+        }
+	}
+	
+    public static long getContentTotalLengthFromResponseAsLong(final HttpResponse response, final long defaultValue) {
+        final String lengthAsString = getContentTotalLengthFromResponse(response);
+        try {
+            return null != lengthAsString ? Long.parseLong(lengthAsString) : defaultValue;
+        }
+        catch (Throwable e) {
+            LOG.warn("exception when Long.parseLong for {}, detail: {}", 
+                    lengthAsString, ExceptionUtils.exception2detail(e));
+            return defaultValue;
+        }
+    }
+    
 	//	return null means no Partial Begin
 	public static String getPartialBeginFromContentRange(final String contentRange) {
 		if ( null == contentRange ) {

@@ -5,20 +5,21 @@ package org.jocean.rosa.impl;
 
 import io.netty.handler.codec.http.HttpResponse;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.net.URI;
-import java.util.UUID;
 
 import javax.ws.rs.core.HttpHeaders;
 
+import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.pool.BytesPool;
-import org.jocean.rosa.spi.ObjectMemo;
 import org.jocean.rosa.spi.Downloadable;
+import org.jocean.rosa.spi.ObjectMemo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,37 +30,71 @@ import com.alibaba.fastjson.annotation.JSONField;
  * @author isdom
  *
  */
-public class FileDownload implements Downloadable {
+public class FileDownload implements Downloadable, Closeable {
     
     private static final Logger LOG = LoggerFactory
             .getLogger(FileDownload.class);
     
     public FileDownload(final URI uri, final File file) {
-        this._id = UUID.randomUUID().toString();
         this._uri = uri;
         this._file = file;
         this._downloadedSize = 0;
         this._etag = null;
+        validDownloadedFile();
     }
     
     @JSONCreator
     public FileDownload(
-            @JSONField(name="id")
-            final String id,
             @JSONField(name="uri")
             final URI uri, 
-            @JSONField(name="downloadedFile")
-            final String filePath,
+            @JSONField(name="downloadedFilename")
+            final String filename,
             @JSONField(name="etag")
             final String etag,
             @JSONField(name="downloadedSize")
-            final int downloadedSize
+            final int downloadedSize,
+            @JSONField(name="totalSize")
+            final int totalSize
             ) {
-        this._id = id;
         this._uri = uri;
-        this._file = new File(filePath);
+        this._file = new File(filename);
         this._downloadedSize = downloadedSize;
+        this._totalSize = totalSize;
         this._etag = etag;
+        validDownloadedFile();
+    }
+    
+    private void validDownloadedFile() {
+        if ( this._downloadedSize > 0 ) {
+            if (!this._file.exists() ) {
+                LOG.warn("downloaded file {} not exist, reset downloadedSize and Etag",  this._file);
+                this._downloadedSize = 0;
+                this._etag = null;
+            }
+            else {
+                try {
+                    final RandomAccessFile output = new RandomAccessFile(this._file, "rw");
+                    if ( null != output ) {
+                        try {
+                            if ( this._downloadedSize != output.length() ) {
+                                LOG.warn("downloaded file {}'s length not equals {}, reset downloaded content, downloadedSize and Etag",  
+                                        this._file, this._downloadedSize);
+                                output.setLength(0);
+                                this._downloadedSize = 0;
+                                this._etag = null;
+                            }
+                        }
+                        finally {
+                            output.close();
+                        }
+                    }
+                }
+                catch (Throwable e) {
+                    LOG.warn("exception when test file {}, detail:{}", 
+                            this._file, ExceptionUtils.exception2detail(e));
+                }
+            }
+        }
     }
     
     public FileDownload setPool(final BytesPool pool) {
@@ -72,13 +107,8 @@ public class FileDownload implements Downloadable {
         return this;
     }
     
-    @JSONField(name = "id")
-    public String getId() {
-        return this._id;
-    }
-
-    @JSONField(name = "downloadedFile")
-    public String getDownloadedFile() {
+    @JSONField(name = "downloadedFilename")
+    public String getDownloadedFilename() {
         try {
             return this._file.getCanonicalPath();
         } catch (IOException e) {
@@ -98,6 +128,11 @@ public class FileDownload implements Downloadable {
         return this._downloadedSize;
     }
 
+    @JSONField(name="totalSize")
+    public int getTotalSize() {
+        return this._totalSize;
+    }
+    
     @JSONField(name="etag")
     @Override
     public String getEtag() {
@@ -111,13 +146,18 @@ public class FileDownload implements Downloadable {
     }
     
     @JSONField(serialize=false)
+    public boolean isDownloadComplete() {
+        return (this._totalSize > 0 && this._totalSize == this._downloadedSize);
+    }
+    
+    @JSONField(serialize=false)
     public File getFile() {
         return this._file;
     }
 
     @Override
     public int appendDownloadedContent(final Blob contentBlob) {
-        validDownloadedFile();
+        initDownloadedFile();
         if ( null != this._output ) {
             return addDownloadedSize( (int)BlockUtils.blob2DataOutput(contentBlob, this._output, this._pool) );
         }
@@ -126,12 +166,12 @@ public class FileDownload implements Downloadable {
         }
     }
     
-    public void saveToMemo() {
-        this._memo.updateToMemo(this._uri.toASCIIString(), this);
+    public void saveToMemo(final String key) {
+        this._memo.updateToMemo(key, this);
     }
     
-    public void removeFromMemo() {
-        this._memo.removeFromMemo(this._uri.toASCIIString());
+    public void removeFromMemo(final String key) {
+        this._memo.removeFromMemo(key);
     }
 
     private int addDownloadedSize(final int bytesAdded) {
@@ -139,7 +179,7 @@ public class FileDownload implements Downloadable {
         return bytesAdded;
     }
     
-    private void validDownloadedFile() {
+    private void initDownloadedFile() {
         if ( null == this._output ) {
             this._output = safeInitDownloadedFile();
         }
@@ -147,7 +187,7 @@ public class FileDownload implements Downloadable {
 
     @Override
     public void resetDownloadedContent() {
-        validDownloadedFile();
+        initDownloadedFile();
         try {
             this._output.setLength(0);
         } catch (IOException e) {
@@ -160,9 +200,16 @@ public class FileDownload implements Downloadable {
     @Override
     public void updateResponse(final HttpResponse response) {
         this._etag = response.headers().get(HttpHeaders.ETAG);
+        this._totalSize = (int)HttpUtils.getContentTotalLengthFromResponseAsLong(response, -1);
     }
 
-    private final String _id;
+    @Override
+    public void close() throws IOException {
+        if ( null != this._output ) {
+            this._output.close();
+            this._output = null;
+        }
+    }
     
     private final File _file;
     
@@ -171,6 +218,8 @@ public class FileDownload implements Downloadable {
     private final URI _uri;
     
     private int _downloadedSize;
+    
+    private int _totalSize = -1;
     
     private String _etag;
     
@@ -201,8 +250,8 @@ public class FileDownload implements Downloadable {
 
     @Override
     public String toString() {
-        return "FileDownload [_id=" + _id + ", _file=" + _file + ", _uri="
-                + _uri + ", _downloadedSize=" + _downloadedSize + ", _etag="
-                + _etag + "]";
+        return "FileDownload [_file=" + _file + ", _uri=" + _uri
+                + ", _downloadedSize=" + _downloadedSize + ", _totalSize="
+                + _totalSize + ", _etag=" + _etag + "]";
     }
 }

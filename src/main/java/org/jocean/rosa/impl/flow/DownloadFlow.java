@@ -174,7 +174,6 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
             }
             
             _downloadable.updateResponse(response);
-            _totalLength = HttpHeaders.getContentLength(response, -1);
             
             if ( LOG.isDebugEnabled() ) {
                 LOG.debug("download for {} recv response {}", _downloadable, response);
@@ -220,12 +219,10 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
                             return OBTAINING;
                         }
                     }
-                    final String partialTotal = HttpUtils.getPartialTotalFromContentRange(contentRange);
-                    if ( null != partialTotal) {
-                        _totalLength = Long.parseLong(partialTotal);
-                    }
                 }
             }
+            
+            _totalLength = HttpUtils.getContentTotalLengthFromResponseAsLong(response, -1);
             
             if ( LOG.isInfoEnabled() ) {
                 LOG.info("download for {}, begin download from {} and total size {}", _downloadable, _downloadable.getDownloadedSize(), _totalLength);
