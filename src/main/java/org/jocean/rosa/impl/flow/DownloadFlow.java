@@ -27,8 +27,6 @@ import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
 import org.jocean.httpclient.impl.HttpUtils;
-import org.jocean.idiom.ArgsHandler;
-import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
@@ -44,8 +42,7 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class DownloadFlow extends AbstractFlow<DownloadFlow> 
-    implements ArgsHandlerSource {
+public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 
 	private static final Logger LOG = LoggerFactory
 			.getLogger(DownloadFlow.class);
@@ -73,11 +70,6 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow>
             }} );
     }
 
-    @Override
-    public ArgsHandler getArgsHandler() {
-        return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
-    }
-    
     private final Object ON_HTTPLOST = new Object() {
         @OnEvent(event = "onHttpClientLost")
         private BizStep onHttpLost(final int guideId)

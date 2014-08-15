@@ -5,6 +5,7 @@ package org.jocean.rosa.api;
 
 import java.net.URI;
 
+import org.jocean.event.api.annotation.GuardReferenceCounted;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.block.Blob;
 
@@ -49,6 +50,7 @@ public interface BlobAgent {
          * blob fetched succeed
          * @param blob : binary data
          */
+        @GuardReferenceCounted
         public void onBlobReceived(final CTX ctx, final Blob blob) throws Exception;
         
         /**

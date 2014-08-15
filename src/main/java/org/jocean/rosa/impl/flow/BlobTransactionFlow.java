@@ -28,8 +28,6 @@ import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
 import org.jocean.httpclient.impl.HttpUtils;
-import org.jocean.idiom.ArgsHandler;
-import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
@@ -49,8 +47,7 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> 
-    implements ArgsHandlerSource {
+public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
 
 	private static final Logger LOG = LoggerFactory
 			.getLogger(BlobTransactionFlow.class);
@@ -85,11 +82,6 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow>
             }} );
     }
 
-    @Override
-    public ArgsHandler getArgsHandler() {
-        return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
-    }
-    
 	public final BizStep WAIT = new BizStep("blob.WAIT")
 			.handler(selfInvoker("onTransactionStart"))
 			.handler(selfInvoker("onDetach"))

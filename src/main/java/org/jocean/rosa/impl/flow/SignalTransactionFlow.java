@@ -25,8 +25,6 @@ import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
-import org.jocean.idiom.ArgsHandler;
-import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
@@ -46,8 +44,7 @@ import com.alibaba.fastjson.JSON;
  * @author isdom
  *
  */
-public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> 
-    implements ArgsHandlerSource {
+public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
     
     public interface SignalConverter {
         
@@ -86,11 +83,6 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow>
                 }
                 notifyReactorFailureIfNeeded();
             }} );
-    }
-    
-    @Override
-    public ArgsHandler getArgsHandler() {
-        return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
     }
     
     private void clearCurrentContent() {

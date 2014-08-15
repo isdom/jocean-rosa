@@ -28,6 +28,7 @@ import java.net.URI;
 import javax.net.ssl.SSLEngine;
 
 import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.RefcountedGuardEventable;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
@@ -196,10 +197,10 @@ public class HttpUtils {
                 final Blob blob = httpContent2Blob((HttpContent)msg);
                 try {
                     if (msg instanceof LastHttpContent) {
-                        this._receiver.acceptEvent(HttpEvents.LASTHTTPCONTENTRECEIVED, ctx, blob);
+                        this._receiver.acceptEvent(new RefcountedGuardEventable(HttpEvents.LASTHTTPCONTENTRECEIVED), ctx, blob);
                     }
                     else {
-                        this._receiver.acceptEvent(HttpEvents.HTTPCONTENTRECEIVED, ctx, blob);
+                        this._receiver.acceptEvent(new RefcountedGuardEventable(HttpEvents.HTTPCONTENTRECEIVED), ctx, blob);
                     }
                 }
                 finally {

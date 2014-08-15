@@ -24,8 +24,6 @@ import org.jocean.httpclient.api.Guide.Requirement;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
 import org.jocean.httpclient.impl.HttpUtils.HttpEvents;
-import org.jocean.idiom.ArgsHandler;
-import org.jocean.idiom.ArgsHandlerSource;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
@@ -40,7 +38,7 @@ import org.slf4j.LoggerFactory;
  * 
  */
 class ChannelFlow extends AbstractFlow<ChannelFlow> 
-    implements Comparable<ChannelFlow>, ArgsHandlerSource {
+    implements Comparable<ChannelFlow> {
     
     interface Publisher {
         public void publishChannelAtIdle(final URI domain, final ChannelFlow channelFlow);
@@ -68,11 +66,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         this._publisher = publisher;
         this._toolkit = toolkit;
         this._bytesPool = bytesPool;
-    }
-
-    @Override
-    public ArgsHandler getArgsHandler() {
-        return ArgsHandler.Consts._REFCOUNTED_ARGS_GUARD;
     }
 
     private class BindedBizStep extends BizStep {
