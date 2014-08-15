@@ -130,7 +130,7 @@ public class DiskObjectMemo implements ObjectMemo {
         return null;
     }
     
-    public <T> void getAll(final Collection<T> objs, final Class<T> clazz) {
+    public <T> void getAll(final Collection<T> objs, final Class<? extends T> clazz) {
         final List<String> keys = new ArrayList<String>();
         
         getAllKeys(keys);

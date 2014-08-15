@@ -18,11 +18,13 @@ import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.pool.BytesPool;
+import org.jocean.rosa.api.RemoteContentAgent;
 import org.jocean.rosa.spi.Downloadable;
 import org.jocean.rosa.spi.ObjectMemo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.annotation.JSONCreator;
 import com.alibaba.fastjson.annotation.JSONField;
 
@@ -30,12 +32,13 @@ import com.alibaba.fastjson.annotation.JSONField;
  * @author isdom
  *
  */
-public class FileDownload implements Downloadable, Closeable {
+public class FileDownload implements Downloadable, Closeable, RemoteContentAgent.Content {
     
     private static final Logger LOG = LoggerFactory
             .getLogger(FileDownload.class);
     
-    public FileDownload(final URI uri, final File file) {
+    public FileDownload(final String key, final URI uri, final File file) {
+        this._key = key;
         this._uri = uri;
         this._file = file;
         this._downloadedSize = 0;
@@ -45,6 +48,8 @@ public class FileDownload implements Downloadable, Closeable {
     
     @JSONCreator
     public FileDownload(
+            @JSONField(name="key")
+            final String key, 
             @JSONField(name="uri")
             final URI uri, 
             @JSONField(name="downloadedFilename")
@@ -54,13 +59,17 @@ public class FileDownload implements Downloadable, Closeable {
             @JSONField(name="downloadedSize")
             final int downloadedSize,
             @JSONField(name="totalSize")
-            final int totalSize
+            final int totalSize,
+            @JSONField(name="attachmentAsJson")
+            final String attachmentJson
             ) {
+        this._key = key;
         this._uri = uri;
         this._file = new File(filename);
         this._downloadedSize = downloadedSize;
         this._totalSize = totalSize;
         this._etag = etag;
+        this._attachment = attachmentJson;
         validDownloadedFile();
     }
     
@@ -116,6 +125,11 @@ public class FileDownload implements Downloadable, Closeable {
         }
     }
     
+    @JSONField(name="key")
+    public String getKey() {
+        return this._key;
+    }
+    
     @JSONField(name="uri")
     @Override
     public URI getUri() {
@@ -137,6 +151,11 @@ public class FileDownload implements Downloadable, Closeable {
     @Override
     public String getEtag() {
         return this._etag;
+    }
+    
+    @JSONField(name="attachmentAsJson")
+    public String getAttachmentAsJson() {
+        return this._attachment;
     }
     
     @JSONField(serialize=false)
@@ -166,12 +185,12 @@ public class FileDownload implements Downloadable, Closeable {
         }
     }
     
-    public void saveToMemo(final String key) {
-        this._memo.updateToMemo(key, this);
+    public void saveToMemo() {
+        this._memo.updateToMemo(this._key, this);
     }
     
-    public void removeFromMemo(final String key) {
-        this._memo.removeFromMemo(key);
+    public void removeFromMemo() {
+        this._memo.removeFromMemo(this._key);
     }
 
     private int addDownloadedSize(final int bytesAdded) {
@@ -211,6 +230,24 @@ public class FileDownload implements Downloadable, Closeable {
         }
     }
     
+    @Override
+    public <T> void saveAttachment(final T attachment) {
+        this._attachment = JSON.toJSONString(attachment);
+        saveToMemo();
+    }
+
+    @Override
+    public <T> T loadAttachment(final Class<T> clazz) {
+        if ( null == this._attachment ) {
+            return null;
+        }
+        else {
+            return JSON.parseObject(this._attachment, clazz);
+        }
+    }
+    
+    private final String _key;
+    
     private final File _file;
     
     private transient RandomAccessFile _output = null; 
@@ -222,6 +259,8 @@ public class FileDownload implements Downloadable, Closeable {
     private int _totalSize = -1;
     
     private String _etag;
+    
+    private String _attachment;
     
     private transient BytesPool _pool;
     
@@ -250,8 +289,9 @@ public class FileDownload implements Downloadable, Closeable {
 
     @Override
     public String toString() {
-        return "FileDownload [_file=" + _file + ", _uri=" + _uri
-                + ", _downloadedSize=" + _downloadedSize + ", _totalSize="
-                + _totalSize + ", _etag=" + _etag + "]";
+        return "FileDownload [_key=" + _key + ", _file=" + _file + ", _uri="
+                + _uri + ", _downloadedSize=" + _downloadedSize
+                + ", _totalSize=" + _totalSize + ", _etag=" + _etag
+                + ", _attachment=" + _attachment + "]";
     }
 }
