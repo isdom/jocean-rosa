@@ -19,6 +19,7 @@ import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
+import org.jocean.event.api.annotation.OnDelayed;
 import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.httpclient.HttpStack;
 import org.jocean.httpclient.api.Guide;
@@ -85,59 +86,222 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             }} );
     }
     
+    private final Object ON_HTTPLOST = new Object() {
+        @OnEvent(event = "onHttpClientLost")
+        private BizStep onHttpLost(final int guideId)
+                throws Exception {
+            if ( !isValidGuideId(guideId) ) {
+                return currentEventHandler();
+            }
+            if ( LOG.isDebugEnabled() ) {
+                LOG.debug("http for {} lost.", _uri);
+            }
+            return incRetryAndSelectStateByRetry();
+        }
+    };
+    
+    private final Object ON_DETACH = new Object() {
+        @OnEvent(event="detach")
+        private BizStep onDetach() throws Exception {
+            if ( LOG.isDebugEnabled() ) {
+                LOG.debug("fetch response for uri:{} progress canceled", _uri);
+            }
+            safeDetachHttpHandle();
+            return null;
+        }
+    };
+    
     private void clearCurrentContent() {
         this._bytesStream.clear();
     }
     
-	public final BizStep WAIT = new BizStep("signal.WAIT")
-			.handler(selfInvoker("onSignalTransactionStart"))
-			.handler(selfInvoker("onDetach"))
-			.freeze();
-	
-	private final BizStep OBTAINING = new BizStep("signal.OBTAINING")
-			.handler(selfInvoker("onHttpObtained"))
-			.handler(selfInvoker("onHttpLost"))
-			.handler(selfInvoker("onDetach"))
-			.freeze();
-
-	private final BizStep RECVRESP = new BizStep("signal.RECVRESP")
-			.handler(selfInvoker("responseReceived"))
-			.handler(selfInvoker("onHttpLost"))
-			.handler(selfInvoker("onDetach"))
-			.freeze();
-
-	private final BizStep RECVCONTENT = new BizStep("signal.RECVCONTENT")
-			.handler(selfInvoker("contentReceived"))
-			.handler(selfInvoker("lastContentReceived"))
-			.handler(selfInvoker("onHttpLost"))
-			.handler(selfInvoker("onDetach"))
-			.freeze();
-
-    private final BizStep SCHEDULE = new BizStep("signal.SCHEDULE")
-            .handler(selfInvoker("schedulingOnDetach"))
-            .freeze();
-    
-	@OnEvent(event="detach")
-	private BizStep onDetach() throws Exception {
-		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("fetch response for uri:{} progress canceled", this._uri);
-		}
-		safeDetachHttpHandle();
-		return null;
+	public final BizStep WAIT = new BizStep("signal.WAIT") {
+	    @OnEvent(event = "start")
+	    private BizStep onSignalTransactionStart(
+	            final Object request, 
+	            final Object ctx,
+	            final Class<?> respCls,
+	            final SignalReactor<Object, Object> reactor, 
+	            final TransactionPolicy policy) {
+	        _request = request;
+	        _ctx = ctx;
+	        _signalReactor = reactor;
+	        _respCls = respCls;
+	        _uri = _converter.req2uri(request);
+	        
+	        if ( null == _uri ) {
+	            // request not registered
+	            LOG.error("request ({}) !NOT! registered with a valid URI, so finished signal flow({})", request, this);
+	            return null;
+	        }
+	        
+	        if ( null != policy ) {
+	            _maxRetryCount = policy.maxRetryCount();
+	            _timeoutFromActived = policy.timeoutFromActived();
+	            _timeoutBeforeRetry = Math.max( policy.timeoutBeforeRetry(), _timeoutBeforeRetry);
+	            _policy = policy;
+	        }
+	        
+	        startObtainHttpClient();
+	        return OBTAINING;
+	    }
 	}
+    .handler(handlersOf(ON_DETACH) )
+	.freeze();
 	
-	@OnEvent(event = "onHttpClientLost")
-	private BizStep onHttpLost(final int guideId)
-			throws Exception {
-        if ( !isValidGuideId(guideId) ) {
-            return this.currentEventHandler();
+	private final BizStep OBTAINING = new BizStep("signal.OBTAINING") {
+	    @OnEvent(event = "onHttpClientObtained")
+	    private BizStep onHttpObtained(final int guideId, final HttpClient httpclient) {
+	        if ( !isValidGuideId(guideId) ) {
+	            return currentEventHandler();
+	        }
+	        final HttpRequest request = 
+	                _converter.processHttpRequest( _request, genHttpRequest(_uri));
+	        if ( LOG.isDebugEnabled() ) {
+	            LOG.debug("send http request {}", request);
+	        }
+	        try {
+	            httpclient.sendHttpRequest(_httpClientId.updateIdAndGet(), request, genHttpReactor() );
+	        }
+	        catch (Exception e) {
+	            LOG.error("state({})/{}: exception when sendHttpRequest, detail:{}", 
+	                    currentEventHandler().getName(), currentEvent(), ExceptionUtils.exception2detail(e));
+	        }
+	        tryStartForceFinishedTimer();
+	        return RECVRESP;
+	    }
+	}
+    .handler(handlersOf(ON_HTTPLOST))
+    .handler(handlersOf(ON_DETACH) )
+	.freeze();
+
+	private final BizStep RECVRESP = new BizStep("signal.RECVRESP") {
+	    @OnEvent(event = "onHttpResponseReceived")
+	    private BizStep responseReceived(final int httpClientId, final HttpResponse response) {
+	        if ( !isValidHttpClientId(httpClientId)) {
+	            return currentEventHandler();
+	        }
+	        if ( LOG.isDebugEnabled() ) {
+	            LOG.debug("channel for {} recv response {}", _uri, response);
+	        }
+	        final String contentType = response.headers().get(HttpHeaders.Names.CONTENT_TYPE);
+	        if ( contentType != null && contentType.startsWith("application/json")) {
+	            LOG.info("try to get json succeed");
+	            return RECVCONTENT;
+	        }
+	        else {
+	            LOG.info("get json failed, wrong contentType {}", contentType);
+	            return  null;
+	        }
+	    }
+	}
+    .handler(handlersOf(ON_HTTPLOST))
+    .handler(handlersOf(ON_DETACH) )
+	.freeze();
+
+	private final BizStep RECVCONTENT = new BizStep("signal.RECVCONTENT") {
+	    @OnEvent(event = "onHttpContentReceived")
+	    private BizStep contentReceived(final int httpClientId, final Blob contentBlob) {
+	        if ( !isValidHttpClientId(httpClientId)) {
+	            return currentEventHandler();
+	        }
+	        BlockUtils.blob2OutputStream(contentBlob, _bytesStream);
+	        return RECVCONTENT;
+	    }
+
+	    @OnEvent(event = "onLastHttpContentReceived")
+	    private BizStep lastContentReceived(final int httpClientId, final Blob contentBlob) throws Exception {
+	        if ( !isValidHttpClientId(httpClientId)) {
+	            return currentEventHandler();
+	        }
+	        BlockUtils.blob2OutputStream(contentBlob, _bytesStream);
+	        
+	        safeDetachHttpHandle();
+	        
+	        final InputStream is = 
+	                Blob.Utils.releaseAndGenInputStream(_bytesStream.drainToBlob());
+	        
+	        if (null==is) {
+	            return null;
+	        }
+	        
+	        if ( LOG.isTraceEnabled() ) {
+	            is.mark(0);
+	            printLongText(is, 80, is.available());
+	            is.reset();
+	        }
+	        
+	        final SignalReactor<Object, Object> reactor = _signalReactor;
+	        _signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
+	        
+	        try {
+	            if ( null != reactor) {
+	                boolean feedbackResponse = false;
+	                // final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
+	                try {
+	                    final byte[] bytes = new byte[is.available()];
+	                    final int readed = is.read(bytes);
+	                    final Object resp = JSON.parseObject(bytes, _respCls);
+	                    
+	    //                final Object resp = reader.readObject(this._respCls);
+	                    if ( null != resp ) {
+	                        try {
+	                            feedbackResponse = true;
+	                            reactor.onResponseReceived(_ctx, resp);
+	                            if ( LOG.isTraceEnabled() ) {
+	                                LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", _uri);
+	                            }
+	                        }
+	                        catch (Throwable e) {
+	                            LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
+	                                    _uri, ExceptionUtils.exception2detail(e));
+	                        }
+	                    }
+	                }
+	                catch (Throwable e) {
+	                    LOG.warn("exception when prepare response for uri:{}, detail:{}", 
+	                            _uri, ExceptionUtils.exception2detail(e));
+	                }
+	                finally {
+	                    if ( !feedbackResponse ) {
+	                        // ensure notify onTransactionFailure with FAILURE_NOCONTENT
+	                        _signalReactor = reactor;
+	                        setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
+	                    }
+	                }
+	            }
+	        }
+	        finally {
+	            is.close();
+	        }
+	        
+	        return null;
+	    }
+	}
+    .handler(handlersOf(ON_HTTPLOST))
+    .handler(handlersOf(ON_DETACH) )
+	.freeze();
+
+    private final BizStep SCHEDULE = new BizStep("signal.SCHEDULE") {
+        @OnEvent(event="detach")
+        private BizStep onDetach() throws Exception {
+            if ( LOG.isDebugEnabled() ) {
+                LOG.debug("fetch response for uri:{} when scheduling and canceled", _uri);
+            }
+            removeAndCancelAllDealyEvents(_timers);
+            safeDetachHttpHandle();
+            return null;
         }
-		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("http for {} lost.", this._uri);
-		}
-        return incRetryAndSelectStateByRetry();
-	}
-
+        
+        @OnDelayed
+        private BizStep onScheduled() {
+            clearCurrentContent();
+            startObtainHttpClient();
+            return OBTAINING;
+        }
+    }
+    .freeze();
+    
     private BizStep incRetryAndSelectStateByRetry() {
         this._retryCount++;
         if ( this._maxRetryCount < 0 ) {
@@ -173,81 +337,11 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
         
         tryStartForceFinishedTimer();
         return ((BizStep)this.fireDelayEventAndAddTo(
-                this.SCHEDULE.makeDelayEvent(
-                    selfInvoker("onScheduled"), 
-                    this._timeoutBeforeRetry), 
-                    this._timers))
+                this.SCHEDULE.makePredefineDelayEvent(this._timeoutBeforeRetry), 
+                this._timers))
                 .freeze();
     }
     
-    @SuppressWarnings("unused")
-    private BizStep onScheduled() {
-        clearCurrentContent();
-        startObtainHttpClient();
-        return OBTAINING;
-    }
-
-    @OnEvent(event="detach")
-    private BizStep schedulingOnDetach() throws Exception {
-        if ( LOG.isDebugEnabled() ) {
-            LOG.debug("fetch response for uri:{} when scheduling and canceled", this._uri);
-        }
-        this.removeAndCancelAllDealyEvents(this._timers);
-        safeDetachHttpHandle();
-        return null;
-    }
-    
-	@OnEvent(event = "start")
-	private BizStep onSignalTransactionStart(
-	        final Object request, 
-	        final Object ctx,
-	        final Class<?> respCls,
-	        final SignalReactor<Object, Object> reactor, 
-	        final TransactionPolicy policy) {
-	    this._request = request;
-	    this._ctx = ctx;
-		this._signalReactor = reactor;
-		this._respCls = respCls;
-		this._uri = this._converter.req2uri(request);
-		
-		if ( null == this._uri ) {
-		    // request not registered
-		    LOG.error("request ({}) !NOT! registered with a valid URI, so finished signal flow({})", request, this);
-		    return null;
-		}
-		
-        if ( null != policy ) {
-            this._maxRetryCount = policy.maxRetryCount();
-            this._timeoutFromActived = policy.timeoutFromActived();
-            this._timeoutBeforeRetry = Math.max( policy.timeoutBeforeRetry(), this._timeoutBeforeRetry);
-            this._policy = policy;
-        }
-		
-		startObtainHttpClient();
-		return OBTAINING;
-	}
-	
-	@OnEvent(event = "onHttpClientObtained")
-	private BizStep onHttpObtained(final int guideId, final HttpClient httpclient) {
-        if ( !isValidGuideId(guideId) ) {
-            return this.currentEventHandler();
-        }
-		final HttpRequest request = 
-		        this._converter.processHttpRequest( this._request, genHttpRequest(this._uri));
-		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("send http request {}", request);
-		}
-        try {
-            httpclient.sendHttpRequest(this._httpClientId.updateIdAndGet(), request, genHttpReactor() );
-        }
-        catch (Exception e) {
-            LOG.error("state({})/{}: exception when sendHttpRequest, detail:{}", 
-                    currentEventHandler().getName(), currentEvent(), ExceptionUtils.exception2detail(e));
-        }
-		tryStartForceFinishedTimer();
-		return RECVRESP;
-	}
-
     @SuppressWarnings("unchecked")
     private HttpReactor<Integer> genHttpReactor() {
         return (HttpReactor<Integer>)this.queryInterfaceInstance(HttpReactor.class);
@@ -273,103 +367,6 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
         }
     }
     
-	@OnEvent(event = "onHttpResponseReceived")
-	private BizStep responseReceived(final int httpClientId, final HttpResponse response) {
-        if ( !isValidHttpClientId(httpClientId)) {
-            return this.currentEventHandler();
-        }
-		if ( LOG.isDebugEnabled() ) {
-			LOG.debug("channel for {} recv response {}", this._uri, response);
-		}
-		final String contentType = response.headers().get(HttpHeaders.Names.CONTENT_TYPE);
-		if ( contentType != null && contentType.startsWith("application/json")) {
-			LOG.info("try to get json succeed");
-			return RECVCONTENT;
-		}
-		else {
-			LOG.info("get json failed, wrong contentType {}", contentType);
-			return	null;
-		}
-	}
-
-	@OnEvent(event = "onHttpContentReceived")
-	private BizStep contentReceived(final int httpClientId, final Blob contentBlob) {
-        if ( !isValidHttpClientId(httpClientId)) {
-            return this.currentEventHandler();
-        }
-	    BlockUtils.blob2OutputStream(contentBlob, this._bytesStream);
-		return RECVCONTENT;
-	}
-
-    @OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final int httpClientId, final Blob contentBlob) throws Exception {
-        if ( !isValidHttpClientId(httpClientId)) {
-            return this.currentEventHandler();
-        }
-        BlockUtils.blob2OutputStream(contentBlob, this._bytesStream);
-		
-        safeDetachHttpHandle();
-		
-        final InputStream is = 
-                Blob.Utils.releaseAndGenInputStream(this._bytesStream.drainToBlob());
-        
-        if (null==is) {
-            return null;
-        }
-        
-        if ( LOG.isTraceEnabled() ) {
-            is.mark(0);
-            printLongText(is, 80, is.available());
-            is.reset();
-        }
-        
-        final SignalReactor<Object, Object> reactor = this._signalReactor;
-        this._signalReactor = null;   // clear _signalReactor 字段，这样 onTransactionFailure 不会再被触发
-        
-        try {
-            if ( null != reactor) {
-                boolean feedbackResponse = false;
-                // final JSONReader reader = new JSONReader(new InputStreamReader(is, "UTF-8"));
-    			try {
-    	            final byte[] bytes = new byte[is.available()];
-    	            final int readed = is.read(bytes);
-    	            final Object resp = JSON.parseObject(bytes,this._respCls);
-    	            
-    //                final Object resp = reader.readObject(this._respCls);
-                    if ( null != resp ) {
-                        try {
-                            feedbackResponse = true;
-    	                    reactor.onResponseReceived(this._ctx, resp);
-    	                    if ( LOG.isTraceEnabled() ) {
-    	                        LOG.trace("signalTransaction invoke onResponseReceived succeed. uri:({})", this._uri);
-    	                    }
-                        }
-                        catch (Throwable e) {
-                            LOG.warn("exception when SgnalReactor.onResponseReceived for uri:{}, detail:{}", 
-                                    this._uri, ExceptionUtils.exception2detail(e));
-                        }
-                    }
-    			}
-    			catch (Throwable e) {
-    				LOG.warn("exception when prepare response for uri:{}, detail:{}", 
-    						this._uri, ExceptionUtils.exception2detail(e));
-    			}
-    			finally {
-                    if ( !feedbackResponse ) {
-                        // ensure notify onTransactionFailure with FAILURE_NOCONTENT
-                        this._signalReactor = reactor;
-                        setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
-                    }
-    			}
-    		}
-        }
-        finally {
-            is.close();
-        }
-        
-		return null;
-	}
-
     private void printLongText(final InputStream is, final int size, final int totalSize) {
         try {
             final byte[] bytes = new byte[totalSize];
