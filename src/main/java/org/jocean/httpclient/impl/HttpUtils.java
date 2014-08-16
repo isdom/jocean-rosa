@@ -144,7 +144,13 @@ public class HttpUtils {
     
 	private static final class HttpHandler extends EventReceiverInboundHandler<HttpObject> {
 	    
-		private final boolean _sslEnabled;
+		private static final RefcountedGuardEventable HTTPCONTENTRECEIVED_EVENT = 
+		        new RefcountedGuardEventable(HttpEvents.HTTPCONTENTRECEIVED);
+
+        private static final RefcountedGuardEventable LASTHTTPCONTENTRECEIVED_EVENT = 
+		        new RefcountedGuardEventable(HttpEvents.LASTHTTPCONTENTRECEIVED);
+		
+        private final boolean _sslEnabled;
 		private final BytesPool _bytesPool;
 		
 		public HttpHandler(final BytesPool bytesPool, final EventReceiver receiver, final boolean sslEnabled) {
@@ -197,10 +203,10 @@ public class HttpUtils {
                 final Blob blob = httpContent2Blob((HttpContent)msg);
                 try {
                     if (msg instanceof LastHttpContent) {
-                        this._receiver.acceptEvent(new RefcountedGuardEventable(HttpEvents.LASTHTTPCONTENTRECEIVED), ctx, blob);
+                        this._receiver.acceptEvent(LASTHTTPCONTENTRECEIVED_EVENT, ctx, blob);
                     }
                     else {
-                        this._receiver.acceptEvent(new RefcountedGuardEventable(HttpEvents.HTTPCONTENTRECEIVED), ctx, blob);
+                        this._receiver.acceptEvent(HTTPCONTENTRECEIVED_EVENT, ctx, blob);
                     }
                 }
                 finally {
