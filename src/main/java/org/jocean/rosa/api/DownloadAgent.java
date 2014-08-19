@@ -62,4 +62,6 @@ public interface DownloadAgent {
      * @return
      */
     public DownloadTask createDownloadTask();
+    
+    public void detachHttpClientOf(final DownloadTask task);
 }

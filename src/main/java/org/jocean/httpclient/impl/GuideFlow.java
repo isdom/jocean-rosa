@@ -131,6 +131,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                 LOG.trace("guideFlow({})/{}/{} has been detached.", 
                         GuideFlow.this, currentEventHandler().getName(), currentEvent());
             }
+            notifyHttpLost();
             return null;
         }
     }

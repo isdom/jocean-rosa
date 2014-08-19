@@ -29,6 +29,8 @@ public interface RemoteContentAgent {
                 final String fname,
                 final ContentReactor<CTX> reactor, 
                 final TransactionPolicy policy);
+        
+        public void detachHttpClient();
     }
 
     public interface ContentReactor<CTX> {

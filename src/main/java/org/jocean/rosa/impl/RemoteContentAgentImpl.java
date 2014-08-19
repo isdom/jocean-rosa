@@ -119,6 +119,11 @@ public class RemoteContentAgentImpl implements RemoteContentAgent {
                         downloadable.saveToMemo();
                         reactor.onFetchContentFailure(ctx, downloadable, failureReason);
                     }}, policy);
+            }
+
+            @Override
+            public void detachHttpClient() {
+                _downloadAgent.detachHttpClientOf(task);
             }};
     }
     

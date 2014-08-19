@@ -84,6 +84,16 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
             notifyReactorTransportInactived();
             return incRetryAndSelectStateByRetry();
         }
+        
+        @OnEvent(event = "detachHttpClient")
+        private BizStep onDetachHttpClient()
+                throws Exception {
+            if ( LOG.isDebugEnabled() ) {
+                LOG.debug("download {} on reserved event: detachHttpClient", _downloadable);
+            }
+            safeDetachHttpGuide();
+            return currentEventHandler();
+        }
     };
     
     private final Object ON_DETACH = new Object() {
