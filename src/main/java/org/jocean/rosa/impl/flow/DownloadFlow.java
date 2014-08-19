@@ -184,46 +184,71 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
             if ( !response.getStatus().equals(HttpResponseStatus.OK)
                 && !response.getStatus().equals(HttpResponseStatus.PARTIAL_CONTENT)) {
                 
-                safeDetachHttpGuide();
                 if ( response.getStatus().equals(HttpResponseStatus.REQUESTED_RANGE_NOT_SATISFIABLE)) {
-                    // 416 Requested Range Not Satisfiable
-                    // 清除 PARTIAL 后，再次尝试完整获取 url
-                    // 此前的 httpClientHandle 已经 detach
-                    // so 如下直接开始重新获取
-                    resetDownloadedContent();
-                    doObtainHttpClient();
-                    return OBTAINING;
+//                    HTTP/1.1 416 Requested Range Not Satisfiable
+//                    Server: marco/0.1
+//                    Date: Tue, 19 Aug 2014 09:42:32 GMT
+//                    Content-Type: application/vnd.android.package-archive
+//                    Content-Length: 7037018
+//                    Connection: keep-alive
+//                    X-Source: U/200
+//                    Last-Modified: Fri, 01 Aug 2014 09:54:58 GMT
+//                    Expires: Wed, 20 Aug 2014 05:32:21 GMT
+//                    Cache-Control: max-age=677841
+//                    Accept-Ranges: bytes
+//                    Age: 196850
+//                    X-Cache: HIT from cun-sd-wef-102, MISS(S)|HIT from cun-zj-huz-004
+//                    Content-Range: bytes 1766185-8803202/8803203 
+                    //  需要处理上述 特例，返回值 为 416，但仍然返回了 Content-Range: bytes 1766185-8803202/8803203，
+                    //  并且起始字节数和 http request 中的要求字节数是一致的
+                    final Long partialBegin = checkAndGetPartialBeginFromContentRange(response);
+                    if ( null != partialBegin 
+                        && _downloadable.getDownloadedSize() == partialBegin) {
+                        return resumeDownload(response);
+                    }
+                    else {
+                        //  Content-Range 不存在 或 Content-Range 中的 partialBegin 与 downloadedSize 不一致
+                        // 416 Requested Range Not Satisfiable
+                        // 清除 PARTIAL 后，再次尝试完整获取 url
+                        // 此前的 httpClientHandle 已经 detach
+                        // so 如下直接开始重新获取
+                        return resetAndStartNewDownload();
+                    }
                 }
                 else {
+                    safeDetachHttpGuide();
                     setFailureReason(TransactionConstants.FAILURE_NOCONTENT);
                     return null;
                 }
             }
             
-            {
-                // check if content range
-                final String contentRange = response.headers().get(HttpHeaders.Names.CONTENT_RANGE);
-                if ( null != contentRange ) {
-                    if ( LOG.isInfoEnabled() ) {
-                        LOG.info("download for {}, recv partial response, detail: {}", _downloadable, contentRange);
-                    }
-                    
-                    // 考虑 Content-Range 的情况
-                    final String partialBegin = HttpUtils.getPartialBeginFromContentRange(contentRange);
-                    if ( null != partialBegin) {
-                        final long responsePartialBegin = Long.parseLong(partialBegin);
-                        if ( _downloadable.getDownloadedSize() != responsePartialBegin ) {
-                            LOG.warn("download for {}, partial begin position({}) !NOT! equals local position({}), restart full download.", 
-                                    _downloadable, responsePartialBegin, _downloadable.getDownloadedSize());
-                            safeDetachHttpGuide();
-                            resetDownloadedContent();
-                            doObtainHttpClient();
-                            return OBTAINING;
-                        }
-                    }
-                }
+            //  http response status is HttpResponseStatus.OK || HttpResponseStatus.PARTIAL_CONTENT
+            final Long partialBegin = checkAndGetPartialBeginFromContentRange(response);
+            if ( null != partialBegin 
+                 && _downloadable.getDownloadedSize() != partialBegin ) {
+                LOG.warn("download for {}, partial begin position({}) !NOT! equals local position({}), restart full download.", 
+                        _downloadable, partialBegin, _downloadable.getDownloadedSize());
+                return resetAndStartNewDownload();
             }
             
+            return resumeDownload(response);
+        }
+
+        /**
+         * @return
+         */
+        private BizStep resetAndStartNewDownload() {
+            safeDetachHttpGuide();
+            resetDownloadedContent();
+            doObtainHttpClient();
+            return OBTAINING;
+        }
+
+        /**
+         * @param response
+         * @return
+         */
+        private BizStep resumeDownload(final HttpResponse response) {
             _totalLength = HttpUtils.getContentTotalLengthFromResponseAsLong(response, -1);
             
             if ( LOG.isInfoEnabled() ) {
@@ -320,6 +345,29 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
         }
     }
     .freeze();
+    
+    private Long checkAndGetPartialBeginFromContentRange(final HttpResponse response) {
+        try {
+            final String contentRange = response.headers().get(HttpHeaders.Names.CONTENT_RANGE);
+            if ( null != contentRange ) {
+                if ( LOG.isInfoEnabled() ) {
+                    LOG.info("download for {}, recv partial response, detail: {}", _downloadable, contentRange);
+                }
+                
+                // 考虑 Content-Range 的情况
+                final String partialBegin = HttpUtils.getPartialBeginFromContentRange(contentRange);
+                if ( null != partialBegin) {
+                    return Long.parseLong(partialBegin);
+                }
+            }
+        }
+        catch (Throwable e) {
+            LOG.warn("exception when checkAndGetPartialBeginFromContentRange for {}, detail: {}",
+                    _downloadable, ExceptionUtils.exception2detail(e));
+        }
+        
+        return null;
+    }
 
     private void safeDetachForceFinishedTimer() {
         if ( null != this._forceFinishedTimer) {
