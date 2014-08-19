@@ -46,11 +46,11 @@
 		<dependency org="org.slf4j" name="slf4j-api" rev="1.7.6" 
             conf="compile->default(*)"/>
 			
-        <dependency org="org.jocean" name="jocean-idiom" rev="0.1.1-SNAPSHOT" 
-            conf="compile->default(*)" changing="true"/>
+        <dependency org="org.jocean" name="jocean-idiom" rev="0.1.1" 
+            conf="compile->default(*)"/>
         
-        <dependency org="org.jocean" name="jocean-event-api" rev="0.0.5-SNAPSHOT" 
-            conf="compile->default(*)" changing="true"/>
+        <dependency org="org.jocean" name="jocean-event-api" rev="0.0.5" 
+            conf="compile->default(*)"/>
         
         <dependency org="io.netty" name="netty-all" rev="4.0.18.Final" 
             conf="compile->defalut(*)" transitive="false"/>
