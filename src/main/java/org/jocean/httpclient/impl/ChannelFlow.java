@@ -148,7 +148,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             if (isCurrentDomainEquals( toBindedDomain )) {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
-                            this, currentEventHandler().getName(), currentEvent(),
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             toBindedDomain, _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
@@ -157,7 +157,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             } else {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                            this, currentEventHandler().getName(), currentEvent(),
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             toBindedDomain, _channel);
                 }
                 // close detach previous channel and re-try
@@ -212,7 +212,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final ChannelHandlerContext ctx) throws Exception {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("channelFlow({})/{}/{} Actived by channel({})",
-                        this, currentEventHandler().getName(), currentEvent(), ctx.channel());
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(), ctx.channel());
             }
             notifyGuideForHttpClientObtained();
             return BINDED_ACTIVED;
@@ -225,7 +225,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             }
 
             if (LOG.isTraceEnabled()) {
-                LOG.trace("ChannelFlow({}) has been detach.", this);
+                LOG.trace("ChannelFlow({}) has been detach.", ChannelFlow.this);
             }
             resetBindedGuideFlow();
             _publisher.publishChannelNolongerBinded(ChannelFlow.this);
@@ -262,7 +262,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             } else {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                            this, currentEventHandler().getName(), currentEvent(),
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             toBindedDomain, _channel);
                 }
                 // close detach previous channel and re-try
@@ -463,7 +463,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             } else {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                            this, currentEventHandler().getName(), currentEvent(),
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             toBindedDomain, _channel);
                 }
                 // close detach previous channel and re-try
@@ -492,7 +492,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             if (isCurrentDomainEquals( toBindedDomain )) {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
-                            this, currentEventHandler().getName(), currentEvent(),
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             toBindedDomain, _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
@@ -502,7 +502,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             } else {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
-                            this, currentEventHandler().getName(), currentEvent(),
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             toBindedDomain, _channel);
                 }
                 // close detach previous channel and re-try
@@ -545,7 +545,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             if (LOG.isTraceEnabled()) {
                 LOG.trace(
                         "ChannelFlow({})/{}/{}: special guide binding id({}) is !NOT! current guide binding id ({}), just ignore.",
-                        this, currentEventHandler().getName(), currentEvent(),
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                         guideBindingId, this._guideBindingId);
             }
         }
@@ -558,7 +558,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             if (LOG.isTraceEnabled()) {
                 LOG.trace(
                         "ChannelFlow({})/{}/{}: special httpclient id({}) is !NOT! current http client id ({}), just ignore.",
-                        this, currentEventHandler().getName(), currentEvent(),
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                         httpClientId, this._httpClientId);
             }
         }
