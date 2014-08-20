@@ -699,8 +699,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     
     @Override
     public String toString() {
-        return "ChannelFlow [id=" + _id + ", state("
-                + currentEventHandler().getName() + "), channel=" + _channel
+        return "ChannelFlow [id=" + _id + ", channel=" + _channel
                 + ", bindedRequirement=" + _requirement + ", domain=" + _domain
                 + ", guideBindingId=" + _guideBindingId
                 + ", httpClientId=" + _httpClientId
