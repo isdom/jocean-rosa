@@ -19,10 +19,12 @@ import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.AbstractUnhandleAware;
 import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.EventUnhandleException;
 import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.httpclient.api.Guide.Requirement;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
+import org.jocean.httpclient.impl.GuideFlow.ChannelRecommendReactor;
 import org.jocean.httpclient.impl.HttpUtils.HttpEvents;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -41,15 +43,8 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     implements Comparable<ChannelFlow> {
     
     interface Publisher {
-        public void publishChannelAtIdle(final URI domain, final ChannelFlow channelFlow);
-        public void publishChannelNolongerIdle(final URI domain, final ChannelFlow channelFlow);
-
-        public void publishChannelAtBinded(final ChannelFlow channelFlow);
-        public void publishChannelNolongerBinded(final ChannelFlow channelFlow);
-        
-        public void publishChannelAtInactive(final ChannelFlow channelFlow);
-        public void publishChannelNolongerInactive(final ChannelFlow channelFlow);
-        
+        public void publishChannelBinded(final ChannelFlow channelFlow);
+        public void publishChannelUnbind(final ChannelFlow channelFlow);
     }
     
     interface Toolkit {
@@ -68,20 +63,35 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         this._bytesPool = bytesPool;
     }
 
+    private boolean canbeInterruptByHighPriority(final int highPriority) {
+        return ( null != this._requirement && this._requirement.priority() < 0 && highPriority >= 0);
+    }
+    
     private class BindedBizStep extends BizStep {
-        public BindedBizStep(final String name) {
+        BindedBizStep(final String name) {
             super(name);
         }
 
-        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-        private BizStep onPublishState() {
-            _publisher.publishChannelAtBinded(ChannelFlow.this);
+        @OnEvent(event = FlowEvents.RECOMMEND_CHANNEL_FOR_BINDING)
+        private BizStep onRecommendChannel(
+                final Requirement requirement, 
+                final ChannelRecommendReactor reactor) {
+            if ( reactor.isRecommendInProgress() 
+               && canbeInterruptByHighPriority(requirement.priority()) ) {
+                reactor.recommendChannel(ChannelRecommendReactor.CAN_BE_INTERRUPTED, 1, selfEventReceiver());
+            }
             return currentEventHandler();
         }
+        
+//        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
+//        private BizStep onPublishState() {
+//            _publisher.publishChannelAtBinded(ChannelFlow.this);
+//            return currentEventHandler();
+//        }
     }
 
     private class BindedBizStepOnInactive extends BindedBizStep {
-        public BindedBizStepOnInactive(final String name) {
+        BindedBizStepOnInactive(final String name) {
             super(name);
         }
 
@@ -93,48 +103,81 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             }
             notifyGuideForChannelLostAndUnbind();
             resetBindedGuideFlow();
-            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-            _publisher.publishChannelAtInactive(ChannelFlow.this);
+            _publisher.publishChannelUnbind(ChannelFlow.this);
             return INACTIVE;
         }
     }
 
     private class IdleBizStep extends BizStep {
-        public IdleBizStep(final String name) {
+        IdleBizStep(final String name) {
             super(name);
         }
 
-        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-        private BizStep onPublishState() {
-            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+        @OnEvent(event = FlowEvents.RECOMMEND_CHANNEL_FOR_BINDING)
+        private BizStep onRecommendChannel(
+                final Requirement requirement, 
+                final ChannelRecommendReactor reactor) {
+            if ( reactor.isRecommendInProgress() ) {
+                if ( isCurrentDomainEquals(requirement.uri()) ) {
+                    reactor.recommendChannel(ChannelRecommendReactor.IDLE_AND_MATCH, 1, selfEventReceiver());
+                }
+                else {
+                    reactor.recommendChannel(ChannelRecommendReactor.IDLE_BUT_NOT_MATCH, 1, selfEventReceiver());
+                }
+            }
             return currentEventHandler();
         }
+        
+//        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
+//        private BizStep onPublishState() {
+//            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+//            return currentEventHandler();
+//        }
     }
     
     final BizStep INACTIVE = new BizStep("httpchannel.INACTIVE") {
+        @OnEvent(event = FlowEvents.RECOMMEND_CHANNEL_FOR_BINDING)
+        private BizStep onRecommendChannel(
+                final Requirement requirement, 
+                final ChannelRecommendReactor reactor) {
+            if ( reactor.isRecommendInProgress() ) {
+                reactor.recommendChannel(ChannelRecommendReactor.INACTIVE, 1, selfEventReceiver());
+            }
+            return currentEventHandler();
+        }
+        
         @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+        private BizStep onBindWithGuide(
+                final int recommendId, 
+                final EventReceiver guideReceiver, 
+                final Requirement requirement)
                 throws Exception {
             notifyGuideForBinded(guideReceiver);
             createChannelAndConnectBy(guideReceiver, requirement);
-            _publisher.publishChannelNolongerInactive(ChannelFlow.this);
-            _publisher.publishChannelAtBinded(ChannelFlow.this);
+            _publisher.publishChannelBinded(ChannelFlow.this);
 
             return BINDED_CONNECTING;
         }
         
-        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-        private BizStep onPublishState() {
-            _publisher.publishChannelAtInactive(ChannelFlow.this);
-            return currentEventHandler();
-        }
+//        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
+//        private BizStep onPublishState() {
+//            _publisher.publishChannelAtInactive(ChannelFlow.this);
+//            return currentEventHandler();
+//        }
     }
     .freeze();
 
     private final BizStep BINDED_CONNECTING = new BindedBizStep("httpchannel.BINDED_CONNECTING") {
         @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+        private BizStep onBindWithGuide(
+                final int recommendId, 
+                final EventReceiver guideReceiver, 
+                final Requirement requirement)
                 throws Exception {
+            if ( !canbeInterruptByHighPriority(requirement.priority()) ) {
+                throw new EventUnhandleException();
+            }
+            
             if (LOG.isTraceEnabled()) {
                 LOG.trace("channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
                         ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
@@ -152,7 +195,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                             toBindedDomain, _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
-                _publisher.publishChannelAtBinded(ChannelFlow.this);
                 return currentEventHandler();
             } else {
                 if (LOG.isDebugEnabled()) {
@@ -163,7 +205,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
                 createChannelAndConnectBy(guideReceiver, requirement);
-                _publisher.publishChannelAtBinded(ChannelFlow.this);
                 return BINDED_CONNECTING;
             }
         }
@@ -174,8 +215,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 return currentEventHandler();
             }
             resetBindedGuideFlow();
-            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            _publisher.publishChannelUnbind(ChannelFlow.this);
             return IDLE_CONNECTING;
         }
         
@@ -196,8 +236,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                         _uri, _channel, ExceptionUtils.exception2detail( future.cause()));
                 notifyGuideForChannelLostAndUnbind();
                 resetBindedGuideFlow();
-                _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-                _publisher.publishChannelAtInactive(ChannelFlow.this);
+                _publisher.publishChannelUnbind(ChannelFlow.this);
                 return INACTIVE;
             } else {
                 if (LOG.isDebugEnabled()) {
@@ -228,8 +267,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 LOG.trace("ChannelFlow({}) has been detach.", ChannelFlow.this);
             }
             resetBindedGuideFlow();
-            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            _publisher.publishChannelUnbind(ChannelFlow.this);
             return IDLE_CONNECTING;
         }
     }
@@ -237,8 +275,15 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
 
     private final BizStep BINDED_ACTIVED = new BindedBizStepOnInactive("httpchannel.BINDED_ACTIVED") {
         @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+        private BizStep onBindWithGuide(
+                final int recommendId, 
+                final EventReceiver guideReceiver, 
+                final Requirement requirement)
                 throws Exception {
+            if ( !canbeInterruptByHighPriority(requirement.priority()) ) {
+                throw new EventUnhandleException();
+            }
+            
             if (LOG.isDebugEnabled()) {
                 LOG.debug("channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
                         ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
@@ -257,7 +302,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
                 notifyGuideForHttpClientObtained();
-                _publisher.publishChannelAtBinded(ChannelFlow.this);
                 return currentEventHandler();
             } else {
                 if (LOG.isDebugEnabled()) {
@@ -268,7 +312,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
                 createChannelAndConnectBy(guideReceiver, requirement);
-                _publisher.publishChannelAtBinded(ChannelFlow.this);
                 return BINDED_CONNECTING;
             }
         }
@@ -279,8 +322,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 return currentEventHandler();
             }
             resetBindedGuideFlow();
-            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            _publisher.publishChannelUnbind(ChannelFlow.this);
             return IDLE_ACTIVED;
         }
         
@@ -317,8 +359,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             }
             
             resetBindedGuideFlow();
-            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
+            _publisher.publishChannelUnbind(ChannelFlow.this);
             return IDLE_ACTIVED;
         }
     }
@@ -327,8 +368,14 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     private final BizStep BINDED_TRANSACTING = new BindedBizStepOnInactive("httpchannel.BINDED_TRANSACTING") {
         @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
         private BizStep onBindWithGuide(
-                final EventReceiver guideReceiver, final Requirement requirement)
+                final int recommendId, 
+                final EventReceiver guideReceiver, 
+                final Requirement requirement)
                 throws Exception {
+            if ( !canbeInterruptByHighPriority(requirement.priority()) ) {
+                throw new EventUnhandleException();
+            }
+            
             if (LOG.isDebugEnabled()) {
                 LOG.debug(
                         "channelFlow({})/{}/{} already binded guideFlow({}), but interrupt by high priority guideFlow({})",
@@ -344,7 +391,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             // close detach previous channel and re-try
             closeAndDetachCurrentChannel();
             createChannelAndConnectBy(guideReceiver, requirement);
-            _publisher.publishChannelAtBinded(ChannelFlow.this);
 
             return BINDED_CONNECTING;
         }
@@ -416,8 +462,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             
             closeAndDetachCurrentChannel();
             resetBindedGuideFlow();
-            _publisher.publishChannelNolongerBinded(ChannelFlow.this);
-            _publisher.publishChannelAtInactive(ChannelFlow.this);
+            _publisher.publishChannelUnbind(ChannelFlow.this);
             return INACTIVE;
         }
     }
@@ -440,8 +485,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 LOG.warn("uri:{}'s channel({}) connect failed, detail: {}", 
                         _uri, _channel, 
                         ExceptionUtils.exception2detail( future.cause()));
-                _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
-                _publisher.publishChannelAtInactive(ChannelFlow.this);
                 return INACTIVE;
             } else {
                 return currentEventHandler();
@@ -449,7 +492,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         }
         
         @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+        private BizStep onBindWithGuide(
+                final int recommendId, 
+                final EventReceiver guideReceiver, 
+                final Requirement requirement)
                 throws Exception {
             notifyGuideForBinded(guideReceiver);
             final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
@@ -470,8 +516,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 closeAndDetachCurrentChannel();
                 createChannelAndConnectBy(guideReceiver, requirement);
             }
-            _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
-            _publisher.publishChannelAtBinded(ChannelFlow.this);
+            _publisher.publishChannelBinded(ChannelFlow.this);
             return BINDED_CONNECTING;
         }
         
@@ -484,9 +529,11 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
 
     private final BizStep IDLE_ACTIVED = new IdleBizStep("httpchannel.IDLE_ACTIVED") {
         @OnEvent(event = FlowEvents.REQUEST_CHANNEL_BIND_WITH_GUIDE)
-        private BizStep onBindWithGuide(final EventReceiver guideReceiver, final Requirement requirement)
+        private BizStep onBindWithGuide(
+                final int recommendId, 
+                final EventReceiver guideReceiver, 
+                final Requirement requirement)
                 throws Exception {
-            _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
             notifyGuideForBinded(guideReceiver);
             final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
             if (isCurrentDomainEquals( toBindedDomain )) {
@@ -497,7 +544,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
                 notifyGuideForHttpClientObtained();
-                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                _publisher.publishChannelBinded(ChannelFlow.this);
                 return BINDED_ACTIVED;
             } else {
                 if (LOG.isDebugEnabled()) {
@@ -508,7 +555,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
                 createChannelAndConnectBy(guideReceiver, requirement);
-                _publisher.publishChannelAtBinded(ChannelFlow.this);
+                _publisher.publishChannelBinded(ChannelFlow.this);
                 return BINDED_CONNECTING;
             }
         }
@@ -518,8 +565,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             if (LOG.isTraceEnabled()) {
                 LOG.trace("IDLE channelFlow({}) closed.", ChannelFlow.this);
             }
-            _publisher.publishChannelNolongerIdle(_domain, ChannelFlow.this);
-            _publisher.publishChannelAtInactive(ChannelFlow.this);
             return INACTIVE;
         }
     }

@@ -597,7 +597,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
         if (!ret) {
             if (LOG.isTraceEnabled()) {
                 LOG.trace(
-                        "BlobTransactionFlow({})/{}/{}: special guide id({}) is !NOT! current guide id ({}), just ignore.",
+                        "DownloadFlow({})/{}/{}: special guide id({}) is !NOT! current guide id ({}), just ignore.",
                         this, currentEventHandler().getName(), currentEvent(),
                         guideId, this._guideId);
             }
@@ -610,7 +610,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
         if (!ret) {
             if (LOG.isTraceEnabled()) {
                 LOG.trace(
-                        "BlobTransactionFlow({})/{}/{}: special httpclient id({}) is !NOT! current httpclient id ({}), just ignore.",
+                        "DownloadFlow({})/{}/{}: special httpclient id({}) is !NOT! current httpclient id ({}), just ignore.",
                         this, currentEventHandler().getName(), currentEvent(),
                         httpClientId, this._httpClientId);
             }
