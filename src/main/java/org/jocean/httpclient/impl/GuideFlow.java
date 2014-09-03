@@ -35,6 +35,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         public EventReceiver[] currentChannelsSnapshot();
     }
     
+    private final static String[] _STATUS_AS_STRING = new String[]{"IDLE_AND_MATCH", "INACTIVE", "IDLE_BUT_NOT_MATCH", "CAN_BE_INTERRUPTED"};
     //  TODO
     //  ~~1. remove guid from pending list~~
     //  ~~2. record current channel to channels~~
@@ -69,7 +70,8 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         @OnEvent(event = "detach")
         private BizStep onDetach() {
             if (LOG.isTraceEnabled()) {
-                LOG.trace("guide(unobtain) has been released.");
+                LOG.trace("guideFlow({})/{}/{} has been detached.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent());
             }
             return null;
         }
@@ -110,6 +112,10 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             final EventReceiver[] channelReceivers = channels.currentChannelsSnapshot();
             if ( null == channelReceivers 
                     || channelReceivers.length == 0) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("guideFlow({})/{}/{} has no channels, abort channel selecting.", 
+                            GuideFlow.this, currentEventHandler().getName(), currentEvent());
+                }
                 //  当前没有可用 channel
                 return currentEventHandler();
             }
@@ -117,6 +123,11 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             final AtomicBoolean isRecommendInProgress = new AtomicBoolean(true);
             
             final int validId = _selectId.updateIdAndGet();
+            
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} start channel selecting(id:{}) from {} channels.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent(), validId, channelReceivers.length);
+            }
             
             final ChannelRecommendReactor reactor = new ChannelRecommendReactor() {
 
@@ -194,6 +205,10 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             
             this._candidateCount--;
             if ( ChannelRecommendReactor.IDLE_AND_MATCH == status ) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("guideFlow({})/{}/{} (id:{}) start bind IDLE_AND_MATCH channel {}, candidateCount {}.", 
+                            GuideFlow.this, currentEventHandler().getName(), currentEvent(), validId, channelReceiver, this._candidateCount);
+                }
                 return startBindToChannel(recommendId, channelReceiver);
             }
             else {
@@ -213,6 +228,10 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             }
             
             this._candidateCount--;
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("guideFlow({})/{}/{} (id:{}) on recommend failed, candidateCount {}.", 
+                        GuideFlow.this, currentEventHandler().getName(), currentEvent(), validId, this._candidateCount);
+            }
             return checkCandidateCountAndReturnNextState();
         }
         
@@ -228,6 +247,10 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         private BizStep selectChannelAndReturnNextState() {
             for ( int i = 0; i < 3; i++) {
                 if ( null != this._recommendChannels[i]) {
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace("guideFlow({})/{}/{} start bind channel {} with status {}.", 
+                                GuideFlow.this, currentEventHandler().getName(), currentEvent(), this._recommendChannels[i], _STATUS_AS_STRING[i+1]);
+                    }
                     return startBindToChannel( this._recommendIds[i], this._recommendChannels[i]);
                 }
             }
@@ -303,7 +326,6 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                 LOG.debug("guideFlow({}) bind channel({}) failed. try to re-attach", 
                         GuideFlow.this, channelEventReceiver);
             }
-//            _publisher.publishGuideAtPending(GuideFlow.this);
             return PENDING;
         }
         
@@ -408,7 +430,9 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         return "GuideFlow [requirement=" + _requirement 
                 + ", guideReactor(" + 
                 (null != _guideReactor ? "not null" : "null") 
-                + "), channel=" + _channelReceiver + "]";
+                + "), channelReceiver(" + 
+                (null != _channelReceiver ? "not null" : "null") 
+                + ")]";
     }
 
     private final ValidationId _selectId = new ValidationId();

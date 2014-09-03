@@ -78,16 +78,15 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final ChannelRecommendReactor reactor) {
             if ( reactor.isRecommendInProgress() 
                && canbeInterruptByHighPriority(requirement.priority()) ) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("channelFlow({})/{}/{} recommend self as CAN_BE_INTERRUPTED for requirement({})",
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                            requirement);
+                }
                 reactor.recommendChannel(ChannelRecommendReactor.CAN_BE_INTERRUPTED, 1, selfEventReceiver());
             }
             return currentEventHandler();
         }
-        
-//        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-//        private BizStep onPublishState() {
-//            _publisher.publishChannelAtBinded(ChannelFlow.this);
-//            return currentEventHandler();
-//        }
     }
 
     private class BindedBizStepOnInactive extends BindedBizStep {
@@ -119,20 +118,24 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final ChannelRecommendReactor reactor) {
             if ( reactor.isRecommendInProgress() ) {
                 if ( isCurrentDomainEquals(requirement.uri()) ) {
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace("channelFlow({})/{}/{} recommend self as IDLE_AND_MATCH for requirement({})",
+                                ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                                requirement);
+                    }
                     reactor.recommendChannel(ChannelRecommendReactor.IDLE_AND_MATCH, 1, selfEventReceiver());
                 }
                 else {
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace("channelFlow({})/{}/{} recommend self as IDLE_BUT_NOT_MATCH for requirement({})",
+                                ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                                requirement);
+                    }
                     reactor.recommendChannel(ChannelRecommendReactor.IDLE_BUT_NOT_MATCH, 1, selfEventReceiver());
                 }
             }
             return currentEventHandler();
         }
-        
-//        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-//        private BizStep onPublishState() {
-//            _publisher.publishChannelAtIdle(_domain, ChannelFlow.this);
-//            return currentEventHandler();
-//        }
     }
     
     final BizStep INACTIVE = new BizStep("httpchannel.INACTIVE") {
@@ -141,6 +144,11 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final Requirement requirement, 
                 final ChannelRecommendReactor reactor) {
             if ( reactor.isRecommendInProgress() ) {
+                if (LOG.isTraceEnabled()) {
+                    LOG.trace("channelFlow({})/{}/{} recommend self as INACTIVE for requirement({})",
+                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                            requirement);
+                }
                 reactor.recommendChannel(ChannelRecommendReactor.INACTIVE, 1, selfEventReceiver());
             }
             return currentEventHandler();
@@ -152,18 +160,17 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace("channelFlow({})/{}/{} bind with guide({})",
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                        guideReceiver);
+            }
             notifyGuideForBinded(guideReceiver);
             createChannelAndConnectBy(guideReceiver, requirement);
             _publisher.publishChannelBinded(ChannelFlow.this);
 
             return BINDED_CONNECTING;
         }
-        
-//        @OnEvent(event = FlowEvents.REQUEST_CHANNEL_PUBLISH_STATE)
-//        private BizStep onPublishState() {
-//            _publisher.publishChannelAtInactive(ChannelFlow.this);
-//            return currentEventHandler();
-//        }
     }
     .freeze();
 
@@ -753,7 +760,9 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 + ")/connectFuture("
                 + (null != _connectFuture ? "not null" : "null") + ")/reactor("
                 + (null != _httpReactor ? "not null" : "null")
-                + "), guideReceiver=" + _guideReceiver + "]";
+                + "), guideReceiver("
+                + (null != _guideReceiver ? "not null" : "null") 
+                + ")]";
     }
     
     private final ValidationId _httpClientId = new ValidationId();
