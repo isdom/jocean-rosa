@@ -6,6 +6,7 @@ package org.jocean.httpclient.impl;
 import io.netty.channel.Channel;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -17,8 +18,10 @@ import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.event.api.FlowLifecycleListener;
+import org.jocean.event.api.annotation.OnDelayed;
 import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.httpclient.api.Guide;
+import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.NettyClient;
@@ -75,9 +78,38 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
             }
         }
         
-        return this.currentEventHandler();
+        return cancelPreviousAndMakeNewTimeoutBizStep();
     }
 
+    @OnEvent(event = "notifyPendingGuidSelectChannel")
+    private BizStep notifyPendingGuidSelectChannel() {
+        final GuideFlow guide = this._pendingGuides.peek();
+        if ( LOG.isTraceEnabled() ) {
+            LOG.trace("notifyPendingGuidSelectChannel: try notify guide({}) select channel.", guide);
+        }
+        if ( null != guide ) {
+            notifyGuidStartSelecting(guide);
+        }
+        return cancelPreviousAndMakeNewTimeoutBizStep();
+    }
+    
+    @OnDelayed
+    private BizStep onTimeout() {
+        notifyPendingGuidSelectChannel();
+        return cancelPreviousAndMakeNewTimeoutBizStep();
+    }
+
+    /**
+     * @return
+     */
+    private BizStep cancelPreviousAndMakeNewTimeoutBizStep() {
+        removeAndCancelAllDealyEvents(this._timers);
+        return ((BizStep)this.fireDelayEventAndAddTo(
+                this.DISPATCH.makePredefineDelayEvent(1000), 
+                this._timers))
+                .freeze();
+    }
+    
     /**
      * @param flow
      */
@@ -146,12 +178,11 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
         }
     }
     
-    //  TODO
     private ChannelFlow createInactiveChannelFlow() {
         final ChannelFlow channelFlow = new ChannelFlow(
                 this._channelPublisher,
-//                this.queryInterfaceInstance(ChannelFlow.Publisher.class), 
-                this._channelToolkit, this._bytesPool)
+                this._channelToolkit, 
+                this._bytesPool)
             .addFlowLifecycleListener(this._channelFlowLifecycleListener);
         
         this._source.create(channelFlow, channelFlow.INACTIVE );
@@ -171,14 +202,19 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     private final ChannelFlow.Publisher _channelPublisher = new ChannelFlow.Publisher() {
 
         @Override
-        public void publishChannelBinded(ChannelFlow channelFlow) {
+        public void publishChannelBinded(final ChannelFlow channelFlow) {
             _bindedChannelCount.incrementAndGet();
         }
 
         @Override
-        public void publishChannelUnbind(
-                ChannelFlow channelFlow) {
+        public void publishChannelUnbind(final ChannelFlow channelFlow) {
             _bindedChannelCount.decrementAndGet();
+            try {
+                selfEventReceiver().acceptEvent("notifyPendingGuidSelectChannel");
+            } catch (Throwable e) {
+                LOG.warn("exception when emit notifyPendingGuidSelectChannel, detail:{}", 
+                        ExceptionUtils.exception2detail(e));
+            }
         }};
         
     private final FlowLifecycleListener<ChannelFlow> _channelFlowLifecycleListener = 
@@ -214,4 +250,5 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     private final BytesPool _bytesPool;
     private final NettyClient _client;
     private final EventReceiverSource _source;
+    private final List<Detachable> _timers = new ArrayList<Detachable>();
 }
