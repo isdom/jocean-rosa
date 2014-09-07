@@ -35,11 +35,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         public EventReceiver[] currentChannelsSnapshot();
     }
     
-    private final static String[] _STATUS_AS_STRING = new String[]{"IDLE_AND_MATCH", "INACTIVE", "IDLE_BUT_NOT_MATCH", "CAN_BE_INTERRUPTED"};
-    //  TODO
-    //  ~~1. remove guid from pending list~~
-    //  ~~2. record current channel to channels~~
-    //  ~~3. add idle channel global~~
+    private final static String[] _LEVEL_AS_STRING = new String[]{"IDLE_AND_MATCH", "INACTIVE", "IDLE_BUT_NOT_MATCH", "CAN_BE_INTERRUPTED"};
     interface ChannelRecommendReactor {
         static final int IDLE_AND_MATCH = 0;
         static final int INACTIVE = 1;
@@ -48,7 +44,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         
         public boolean isRecommendInProgress();
         public void recommendChannel(
-                final int status, // idle, binded or ...
+                final int recommendLevel, // idle, binded or ...
                 final int recommendId,// id to mark this recommend action
                 final EventReceiver channelReceiver);
     }
@@ -138,11 +134,11 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
 
                 @Override
                 public void recommendChannel(
-                        final int status,
+                        final int level,
                         final int recommendId,// id to mark this recommend action
                         final EventReceiver channelReceiver) {
                     try {
-                        selfEventReceiver().acceptEvent("onRecommendChannel", validId, status, recommendId, channelReceiver);
+                        selfEventReceiver().acceptEvent("onRecommendChannel", validId, level, recommendId, channelReceiver);
                     } catch (Throwable e) {
                         LOG.warn("exception when emit onRecommendChannel, detail:{}", 
                                 ExceptionUtils.exception2detail(e));
@@ -196,7 +192,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         @OnEvent(event = "onRecommendChannel") 
         private BizStep onRecommendChannel(
                 final int validId,
-                final int status,
+                final int recommendLevel,
                 final int recommendId, 
                 final EventReceiver channelReceiver)  {
             if ( !isValidSelectId(validId) ) {
@@ -204,7 +200,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             }
             
             this._candidateCount--;
-            if ( ChannelRecommendReactor.IDLE_AND_MATCH == status ) {
+            if ( ChannelRecommendReactor.IDLE_AND_MATCH == recommendLevel ) {
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("guideFlow({})/{}/{} (id:{}) start bind IDLE_AND_MATCH channel {}, candidateCount {}.", 
                             GuideFlow.this, currentEventHandler().getName(), currentEvent(), validId, channelReceiver, this._candidateCount);
@@ -213,8 +209,8 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             }
             else {
                 // record channel's event receiver
-                this._recommendIds[status-1] = recommendId;
-                this._recommendChannels[status-1] = channelReceiver;
+                this._recommendIds[recommendLevel-1] = recommendId;
+                this._recommendChannels[recommendLevel-1] = channelReceiver;
             }
             //  record candidate
             return checkCandidateCountAndReturnNextState();
@@ -248,8 +244,8 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             for ( int i = 0; i < 3; i++) {
                 if ( null != this._recommendChannels[i]) {
                     if (LOG.isTraceEnabled()) {
-                        LOG.trace("guideFlow({})/{}/{} start bind channel {} with status {}.", 
-                                GuideFlow.this, currentEventHandler().getName(), currentEvent(), this._recommendChannels[i], _STATUS_AS_STRING[i+1]);
+                        LOG.trace("guideFlow({})/{}/{} start bind channel {} with level {}.", 
+                                GuideFlow.this, currentEventHandler().getName(), currentEvent(), this._recommendChannels[i], _LEVEL_AS_STRING[i+1]);
                     }
                     return startBindToChannel( this._recommendIds[i], this._recommendChannels[i]);
                 }

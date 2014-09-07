@@ -67,6 +67,14 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         return ( null != this._requirement && this._requirement.priority() < 0 && highPriority >= 0);
     }
     
+    /**
+     * @param recommendLevel 
+     * @param reactor
+     */
+    private void recommendSelfAs(final int recommendLevel, final ChannelRecommendReactor reactor) {
+        reactor.recommendChannel(recommendLevel, this._recommendId.updateIdAndGet(), this.selfEventReceiver());
+    }
+    
     private class BindedBizStep extends BizStep {
         BindedBizStep(final String name) {
             super(name);
@@ -83,7 +91,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             requirement);
                 }
-                reactor.recommendChannel(ChannelRecommendReactor.CAN_BE_INTERRUPTED, 1, selfEventReceiver());
+                recommendSelfAs(ChannelRecommendReactor.CAN_BE_INTERRUPTED, reactor);
             }
             return currentEventHandler();
         }
@@ -123,7 +131,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                                 ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                                 requirement);
                     }
-                    reactor.recommendChannel(ChannelRecommendReactor.IDLE_AND_MATCH, 1, selfEventReceiver());
+                    recommendSelfAs(ChannelRecommendReactor.IDLE_AND_MATCH, reactor);
                 }
                 else {
                     if (LOG.isTraceEnabled()) {
@@ -131,7 +139,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                                 ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                                 requirement);
                     }
-                    reactor.recommendChannel(ChannelRecommendReactor.IDLE_BUT_NOT_MATCH, 1, selfEventReceiver());
+                    recommendSelfAs(ChannelRecommendReactor.IDLE_BUT_NOT_MATCH, reactor);
                 }
             }
             return currentEventHandler();
@@ -149,7 +157,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
                             requirement);
                 }
-                reactor.recommendChannel(ChannelRecommendReactor.INACTIVE, 1, selfEventReceiver());
+                recommendSelfAs(ChannelRecommendReactor.INACTIVE, reactor);
             }
             return currentEventHandler();
         }
@@ -160,6 +168,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if ( !isValidRecommendId(recommendId) ) {
+                throw new EventUnhandleException();
+            }
+            
             if (LOG.isTraceEnabled()) {
                 LOG.trace("channelFlow({})/{}/{} bind with guide({})",
                         ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
@@ -181,6 +193,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if ( !isValidRecommendId(recommendId) ) {
+                throw new EventUnhandleException();
+            }
+            
             if ( !canbeInterruptByHighPriority(requirement.priority()) ) {
                 throw new EventUnhandleException();
             }
@@ -287,6 +303,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if ( !isValidRecommendId(recommendId) ) {
+                throw new EventUnhandleException();
+            }
+            
             if ( !canbeInterruptByHighPriority(requirement.priority()) ) {
                 throw new EventUnhandleException();
             }
@@ -379,6 +399,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if ( !isValidRecommendId(recommendId) ) {
+                throw new EventUnhandleException();
+            }
+            
             if ( !canbeInterruptByHighPriority(requirement.priority()) ) {
                 throw new EventUnhandleException();
             }
@@ -504,6 +528,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if ( !isValidRecommendId(recommendId) ) {
+                throw new EventUnhandleException();
+            }
+            
             notifyGuideForBinded(guideReceiver);
             final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
             if (isCurrentDomainEquals( toBindedDomain )) {
@@ -541,6 +569,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final EventReceiver guideReceiver, 
                 final Requirement requirement)
                 throws Exception {
+            if ( !isValidRecommendId(recommendId) ) {
+                throw new EventUnhandleException();
+            }
+            
             notifyGuideForBinded(guideReceiver);
             final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
             if (isCurrentDomainEquals( toBindedDomain )) {
@@ -617,6 +649,19 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         return ret;
     }
 
+    private boolean isValidRecommendId(final int recommendId) {
+        final boolean ret = this._recommendId.isValidId(recommendId);
+        if (!ret) {
+            if (LOG.isTraceEnabled()) {
+                LOG.trace(
+                        "ChannelFlow({})/{}/{}: special recommend id({}) is !NOT! current recommend id ({}), just ignore.",
+                        ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                        recommendId, this._recommendId);
+            }
+        }
+        return ret;
+    }
+    
     /**
      * @param domain
      * @return
@@ -755,6 +800,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 + ", bindedRequirement=" + _requirement + ", domain=" + _domain
                 + ", guideBindingId=" + _guideBindingId
                 + ", httpClientId=" + _httpClientId
+                + ", recommendId=" + _recommendId
                 + ", channelDetacher("
                 + (null != _channelDetacher ? "not null" : "null")
                 + ")/connectFuture("
@@ -767,6 +813,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     
     private final ValidationId _httpClientId = new ValidationId();
     private final ValidationId _guideBindingId = new ValidationId();
+    private final ValidationId _recommendId = new ValidationId();
     private final Publisher _publisher;
     private final Toolkit _toolkit;
     private final BytesPool _bytesPool;
