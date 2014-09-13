@@ -84,14 +84,19 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         private BizStep onRecommendChannel(
                 final Requirement requirement, 
                 final ChannelRecommendReactor reactor) {
-            if ( reactor.isRecommendInProgress() 
-               && canbeInterruptByHighPriority(requirement.priority()) ) {
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("channelFlow({})/{}/{} recommend self as CAN_BE_INTERRUPTED for requirement({})",
-                            ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            requirement);
+            if ( reactor.isRecommendInProgress() ) {
+                // recommend self or tell event-framework as un-handle
+               if ( canbeInterruptByHighPriority(requirement.priority()) ) {
+                    if (LOG.isTraceEnabled()) {
+                        LOG.trace("channelFlow({})/{}/{} recommend self as CAN_BE_INTERRUPTED for requirement({})",
+                                ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
+                                requirement);
+                    }
+                    recommendSelfAs(ChannelRecommendReactor.CAN_BE_INTERRUPTED, reactor);
                 }
-                recommendSelfAs(ChannelRecommendReactor.CAN_BE_INTERRUPTED, reactor);
+            }
+            else {
+                throw new EventUnhandleException();
             }
             return currentEventHandler();
         }

@@ -18,8 +18,6 @@ public class HttpStack {
 //	private static final Logger LOG =
 //			LoggerFactory.getLogger(HttpStack.class);
 
-	private final MediatorFlow _mediator;
-	
     public HttpStack(
             final BytesPool bytesPool,
             final EventReceiverSource source,
@@ -32,4 +30,6 @@ public class HttpStack {
     public Guide createHttpClientGuide() {
         return this._mediator.createHttpClientGuide();
     }
+    
+    private final MediatorFlow _mediator;
 }

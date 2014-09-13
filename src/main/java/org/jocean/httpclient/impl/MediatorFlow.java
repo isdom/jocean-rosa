@@ -95,8 +95,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     
     @OnDelayed
     private BizStep onTimeout() {
-        notifyPendingGuidSelectChannel();
-        return cancelPreviousAndMakeNewTimeoutBizStep();
+        return notifyPendingGuidSelectChannel();
     }
 
     /**
