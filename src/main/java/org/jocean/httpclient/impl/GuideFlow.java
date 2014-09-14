@@ -10,6 +10,7 @@ import org.jocean.event.api.AbstractUnhandleAware;
 import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.annotation.OnEvent;
+import org.jocean.event.api.internal.Eventable;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.Guide.Requirement;
@@ -145,20 +146,22 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                     }
                 }};
             
+           final Eventable recommendEvent = new AbstractUnhandleAware(FlowEvents.RECOMMEND_CHANNEL_FOR_BINDING) {
+
+                    @Override
+                    public void onEventUnhandle(final String event, final Object... args)
+                            throws Exception {
+                        try {
+                            selfEventReceiver().acceptEvent("onRecommendFailed", validId);
+                        } catch (Throwable e) {
+                            LOG.warn("exception when emit onRecommendFailed, detail:{}", 
+                                    ExceptionUtils.exception2detail(e));
+                        }
+                    }};
+                    
             for ( EventReceiver receiver : channelReceivers ) {
                 try {
-                    receiver.acceptEvent(new AbstractUnhandleAware(FlowEvents.RECOMMEND_CHANNEL_FOR_BINDING) {
-
-                        @Override
-                        public void onEventUnhandle(String event, Object... args)
-                                throws Exception {
-                            try {
-                                selfEventReceiver().acceptEvent("onRecommendFailed", validId);
-                            } catch (Throwable e) {
-                                LOG.warn("exception when emit onRecommendFailed, detail:{}", 
-                                        ExceptionUtils.exception2detail(e));
-                            }
-                        }}, _requirement, reactor);
+                    receiver.acceptEvent(recommendEvent, _requirement, reactor);
                 } catch (Throwable e) {
                     LOG.warn("exception when emit FlowEvents.RECOMMEND_CHANNEL_FOR_BINDING, detail:{}", 
                             ExceptionUtils.exception2detail(e));
