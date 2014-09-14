@@ -94,9 +94,9 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                     }
                     recommendSelfAs(ChannelRecommendReactor.CAN_BE_INTERRUPTED, reactor);
                 }
-            }
-            else {
-                throw new EventUnhandleException();
+               else {
+                   throw new EventUnhandleException();
+               }
             }
             return currentEventHandler();
         }
