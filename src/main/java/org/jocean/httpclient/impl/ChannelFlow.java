@@ -696,7 +696,15 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     private void updateBindedGuideFlow(final EventReceiver guideReceiver, final Requirement requirement) {
         this._uri = requirement.uri();
         this._domain = this._toolkit.genDomainByURI(this._uri);
-        this._requirement = new HttpRequirementImpl<ChannelFlow>(requirement, this);
+        this._requirement = new Requirement() {
+            @Override
+            public int priority() {
+                return requirement.priority();
+            }
+            @Override
+            public URI uri() {
+                return requirement.uri();
+            }};
         this._guideReceiver = guideReceiver;
         this._httpReactor = null;
     }
@@ -795,10 +803,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         return this._domain;
     }
     
-    public HttpRequirementImpl<ChannelFlow> bindedRequirement() {
-        return this._requirement;
-    }
-    
     @Override
     public String toString() {
         return "ChannelFlow [id=" + _id + ", channel=" + _channel
@@ -830,7 +834,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     private Object _userCtx;
     private HttpReactor<Object> _httpReactor = null;
     private EventReceiver _guideReceiver = null;
-    private volatile HttpRequirementImpl<ChannelFlow> _requirement = null;
+    private volatile Requirement _requirement = null;
 
     private final int _id = _FLOW_IDSRC.getAndIncrement();
 

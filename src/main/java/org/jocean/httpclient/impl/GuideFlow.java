@@ -3,6 +3,7 @@
  */
 package org.jocean.httpclient.impl;
 
+import java.net.URI;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jocean.event.api.AbstractFlow;
@@ -70,6 +71,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                 LOG.trace("guideFlow({})/{}/{} has been detached.", 
                         GuideFlow.this, currentEventHandler().getName(), currentEvent());
             }
+            setEndReason("UNOBTAIN.detach");
             return null;
         }
         
@@ -84,7 +86,15 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                 throw new NullPointerException("Requirement and GuideReactor can't be null.");
             }
             _userCtx = userCtx;
-            _requirement = new HttpRequirementImpl<GuideFlow>(requirement, GuideFlow.this);
+            _requirement = new Requirement() {
+                @Override
+                public int priority() {
+                    return requirement.priority();
+                }
+                @Override
+                public URI uri() {
+                    return requirement.uri();
+                }};
             _guideReactor = guideReactor;
             _publisher.publishGuideAtPending(GuideFlow.this);
             return PENDING;
@@ -101,6 +111,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             }
             _publisher.publishGuideLeavePending(GuideFlow.this);
             notifyHttpLost();
+            setEndReason("PENDING.detach");
             return null;
         }
         
@@ -189,6 +200,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             this._isRecommendInProgress.set(false);
             _publisher.publishGuideLeavePending(GuideFlow.this);
             notifyHttpLost();
+            setEndReason("SELECTING.detach");
             return null;
         }
         
@@ -336,6 +348,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             }
             _publisher.publishGuideLeavePending(GuideFlow.this);
             notifyHttpLost();
+            setEndReason("ATTACHING.detach");
             return null;
         }
     }
@@ -372,6 +385,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                         ExceptionUtils.exception2detail(e));
             }
             notifyHttpLost();
+            setEndReason("ATTACHED.detach");
             return null;
         }
         
@@ -382,6 +396,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                         GuideFlow.this, currentEventHandler().getName(), currentEvent());
             }
             notifyHttpLost();
+            setEndReason("ATTACHED.channelLost");
             return null;
         }
     }

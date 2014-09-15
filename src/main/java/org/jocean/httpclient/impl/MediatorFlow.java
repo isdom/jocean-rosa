@@ -36,14 +36,16 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     
     private static final Logger LOG = LoggerFactory
             .getLogger(MediatorFlow.class);
-    
+
     public MediatorFlow(
-            final BytesPool bytesPool,
-            final EventReceiverSource source,
-            final NettyClient client, 
-            final int maxActived) {
+            final BytesPool bytesPool, 
+            final EventReceiverSource source4guide,
+            final EventReceiverSource source4channel, 
+            final NettyClient client,
+            int maxActived) {
         this._bytesPool = bytesPool;
-        this._source = source;
+        this._source4guide = source4guide;
+        this._source4channel = source4channel;
         this._client = client;
         this._maxChannelCount = maxActived;
     }
@@ -51,7 +53,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     public Guide createHttpClientGuide() {
         final GuideFlow flow = new GuideFlow(
                 this.queryInterfaceInstance(GuideFlow.Publisher.class));
-        this._source.create(flow, flow.UNOBTAIN );
+        this._source4guide.create(flow, flow.UNOBTAIN );
         return flow.queryInterfaceInstance(Guide.class);
     }
     
@@ -184,7 +186,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
                 this._bytesPool)
             .addFlowLifecycleListener(this._channelFlowLifecycleListener);
         
-        this._source.create(channelFlow, channelFlow.INACTIVE );
+        this._source4channel.create(channelFlow, channelFlow.INACTIVE );
         return channelFlow;
     }
     
@@ -248,6 +250,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     
     private final BytesPool _bytesPool;
     private final NettyClient _client;
-    private final EventReceiverSource _source;
+    private final EventReceiverSource _source4guide;
+    private final EventReceiverSource _source4channel;
     private final List<Detachable> _timers = new ArrayList<Detachable>();
 }

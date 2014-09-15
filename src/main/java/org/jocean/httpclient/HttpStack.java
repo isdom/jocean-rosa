@@ -23,10 +23,19 @@ public class HttpStack {
             final EventReceiverSource source,
             final NettyClient client, 
             final int maxActived) {
-        this._mediator = new MediatorFlow(bytesPool, source, client, maxActived);
-        source.create(this._mediator, this._mediator.DISPATCH);
+        this(bytesPool, source, source, client, maxActived);
     }
 
+    public HttpStack(
+            final BytesPool bytesPool,
+            final EventReceiverSource source4guide,
+            final EventReceiverSource source4channel,
+            final NettyClient client, 
+            final int maxActived) {
+        this._mediator = new MediatorFlow(bytesPool, source4guide, source4channel, client, maxActived);
+        source4guide.create(this._mediator, this._mediator.DISPATCH);
+    }
+    
     public Guide createHttpClientGuide() {
         return this._mediator.createHttpClientGuide();
     }
