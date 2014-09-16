@@ -8,9 +8,9 @@ import io.netty.channel.Channel;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.jocean.event.api.AbstractFlow;
@@ -42,14 +42,30 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
             final EventReceiverSource source4guide,
             final EventReceiverSource source4channel, 
             final NettyClient client,
-            int maxActived) {
+            final int maxChannelCount) {
         this._bytesPool = bytesPool;
         this._source4guide = source4guide;
         this._source4channel = source4channel;
         this._client = client;
-        this._maxChannelCount = maxActived;
+        this._maxChannelCount = maxChannelCount;
     }
 
+    public int getMaxChannelCount() {
+        return this._maxChannelCount;
+    }
+    
+    public int getTotalChannelCount() {
+        return this._currentChannelCount.get();
+    }
+    
+    public int getBindedChannelCount() {
+        return this._bindedChannelCount.get();
+    }
+    
+    public int getPendingGuideCount() {
+        return this._pendingGuides.size();
+    }
+    
     public Guide createHttpClientGuide() {
         final GuideFlow flow = new GuideFlow(
                 this.queryInterfaceInstance(GuideFlow.Publisher.class));
@@ -246,7 +262,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     private final List<EventReceiver> _channelReceivers = new CopyOnWriteArrayList<EventReceiver>();
     private final AtomicInteger _bindedChannelCount = new AtomicInteger(0);
     
-    private final Queue<GuideFlow> _pendingGuides = new PriorityQueue<GuideFlow>();
+    private final Queue<GuideFlow> _pendingGuides = new PriorityBlockingQueue<GuideFlow>();
     
     private final BytesPool _bytesPool;
     private final NettyClient _client;

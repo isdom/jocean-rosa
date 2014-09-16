@@ -22,8 +22,8 @@ public class HttpStack {
             final BytesPool bytesPool,
             final EventReceiverSource source,
             final NettyClient client, 
-            final int maxActived) {
-        this(bytesPool, source, source, client, maxActived);
+            final int maxHttpConnectionCount) {
+        this(bytesPool, source, source, client, maxHttpConnectionCount);
     }
 
     public HttpStack(
@@ -31,13 +31,29 @@ public class HttpStack {
             final EventReceiverSource source4guide,
             final EventReceiverSource source4channel,
             final NettyClient client, 
-            final int maxActived) {
-        this._mediator = new MediatorFlow(bytesPool, source4guide, source4channel, client, maxActived);
+            final int maxHttpConnectionCount) {
+        this._mediator = new MediatorFlow(bytesPool, source4guide, source4channel, client, maxHttpConnectionCount);
         source4guide.create(this._mediator, this._mediator.DISPATCH);
     }
     
     public Guide createHttpClientGuide() {
         return this._mediator.createHttpClientGuide();
+    }
+    
+    public int getMaxHttpConnectionCount() {
+        return this._mediator.getMaxChannelCount();
+    }
+    
+    public int getTotalHttpConnectionCount() {
+        return this._mediator.getTotalChannelCount();
+    }
+    
+    public int getBindedHttpConnectionCount() {
+        return this._mediator.getBindedChannelCount();
+    }
+    
+    public int getPendingGuideCount() {
+        return this._mediator.getPendingGuideCount();
     }
     
     private final MediatorFlow _mediator;
