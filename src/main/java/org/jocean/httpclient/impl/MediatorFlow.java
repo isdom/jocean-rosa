@@ -99,11 +99,11 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
         return cancelPreviousAndMakeNewTimeoutBizStep();
     }
 
-    @OnEvent(event = "notifyPendingGuidSelectChannel")
-    private BizStep notifyPendingGuidSelectChannel() {
+    @OnEvent(event = "notifyPendingGuideSelectChannel")
+    private BizStep notifyPendingGuideSelectChannel() {
         final GuideFlow guide = this._pendingGuides.peek();
         if ( LOG.isTraceEnabled() ) {
-            LOG.trace("notifyPendingGuidSelectChannel: try notify guide({}) select channel.", guide);
+            LOG.trace("notifyPendingGuideSelectChannel: try notify guide({}) select channel.", guide);
         }
         if ( null != guide ) {
             notifyGuidStartSelecting(guide);
@@ -113,7 +113,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
     
     @OnDelayed
     private BizStep onTimeout() {
-        return notifyPendingGuidSelectChannel();
+        return notifyPendingGuideSelectChannel();
     }
 
     /**
@@ -227,7 +227,7 @@ public class MediatorFlow extends AbstractFlow<MediatorFlow> {
         public void publishChannelUnbind(final ChannelFlow channelFlow) {
             _bindedChannelCount.decrementAndGet();
             try {
-                selfEventReceiver().acceptEvent("notifyPendingGuidSelectChannel");
+                selfEventReceiver().acceptEvent("notifyPendingGuideSelectChannel");
             } catch (Throwable e) {
                 LOG.warn("exception when emit notifyPendingGuidSelectChannel, detail:{}", 
                         ExceptionUtils.exception2detail(e));

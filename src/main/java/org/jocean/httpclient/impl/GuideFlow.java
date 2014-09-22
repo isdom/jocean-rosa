@@ -31,6 +31,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
     interface Publisher {
         public void publishGuideAtPending(final GuideFlow guideFlow);
         public void publishGuideLeavePending(final GuideFlow guideFlow);
+        public void notifyPendingGuideSelectChannel();
     }
     
     interface Channels {
@@ -327,6 +328,8 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             _channelReceiver = channelEventReceiver;
             _channelDetacher = detacher;
             _publisher.publishGuideLeavePending(GuideFlow.this);
+            //  触发下一个 guide 被处理
+            _publisher.notifyPendingGuideSelectChannel();
             return ATTACHED;
         }
         
