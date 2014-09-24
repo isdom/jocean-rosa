@@ -5,7 +5,7 @@ package org.jocean.httpclient;
 
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.httpclient.api.Guide;
-import org.jocean.httpclient.impl.MediatorFlow;
+import org.jocean.httpclient.impl.Mediator;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.NettyClient;
 
@@ -32,8 +32,7 @@ public class HttpStack {
             final EventReceiverSource source4channel,
             final NettyClient client, 
             final int maxHttpConnectionCount) {
-        this._mediator = new MediatorFlow(bytesPool, source4guide, source4channel, client, maxHttpConnectionCount);
-        source4guide.create(this._mediator, this._mediator.DISPATCH);
+        this._mediator = new Mediator(bytesPool, source4guide, source4channel, client, maxHttpConnectionCount);
     }
     
     public Guide createHttpClientGuide() {
@@ -56,5 +55,5 @@ public class HttpStack {
         return this._mediator.getPendingGuideCount();
     }
     
-    private final MediatorFlow _mediator;
+    private final Mediator _mediator;
 }
