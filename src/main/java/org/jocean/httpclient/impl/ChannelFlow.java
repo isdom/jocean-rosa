@@ -723,9 +723,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             if (null != this._connectFuture && !this._connectFuture.isDone()) {
                 this._connectFuture.cancel(false);
             }
-            if (null != this._channel) {
-                this._channel.close();
-            }
             if (null != this._channelDetacher) {
                 try {
                     this._channelDetacher.detach();
@@ -733,6 +730,9 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                     LOG.warn("exception when _channelDetacher.detach, detail:{}", 
                             ExceptionUtils.exception2detail(e));
                 }
+            }
+            if (null != this._channel) {
+                this._channel.close();
             }
         }
         finally {
