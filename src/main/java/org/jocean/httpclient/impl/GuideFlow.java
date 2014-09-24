@@ -258,10 +258,6 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         private BizStep selectChannelAndReturnNextState() {
             for ( int i = 0; i < 3; i++) {
                 if ( null != this._recommendChannels[i]) {
-                    if (LOG.isTraceEnabled()) {
-                        LOG.trace("guideFlow({})/{}/{} start bind channel {} with level {}.", 
-                                GuideFlow.this, currentEventHandler().getName(), currentEvent(), this._recommendChannels[i], _LEVEL_AS_STRING[i+1]);
-                    }
                     return startBindToChannel( this._recommendIds[i], this._recommendChannels[i]);
                 }
             }
