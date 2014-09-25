@@ -86,14 +86,20 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
                 throw new NullPointerException("Requirement and GuideReactor can't be null.");
             }
             _userCtx = userCtx;
+            final int priority = requirement.priority();
+            final URI uri = requirement.uri();
             _requirement = new Requirement() {
                 @Override
                 public int priority() {
-                    return requirement.priority();
+                    return priority;
                 }
                 @Override
                 public URI uri() {
-                    return requirement.uri();
+                    return uri;
+                }
+                @Override
+                public String toString() {
+                    return "(priority:" + priority + ",uri:" + uri + ")";
                 }};
             _guideReactor = guideReactor;
             _publisher.publishGuideAtPending(GuideFlow.this);

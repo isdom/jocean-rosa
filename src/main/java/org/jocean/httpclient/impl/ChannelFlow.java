@@ -696,14 +696,20 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     private void updateBindedGuideFlow(final EventReceiver guideReceiver, final Requirement requirement) {
         this._uri = requirement.uri();
         this._domain = this._toolkit.genDomainByURI(this._uri);
+        final int priority = requirement.priority();
+        final URI uri = requirement.uri();
         this._requirement = new Requirement() {
             @Override
             public int priority() {
-                return requirement.priority();
+                return priority;
             }
             @Override
             public URI uri() {
-                return requirement.uri();
+                return uri;
+            }
+            @Override
+            public String toString() {
+                return "(priority:" + priority + ",uri:" + uri + ")";
             }};
         this._guideReceiver = guideReceiver;
         this._httpReactor = null;

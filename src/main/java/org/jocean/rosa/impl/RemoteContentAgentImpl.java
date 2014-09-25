@@ -9,7 +9,6 @@ import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.DownloadAgent;
 import org.jocean.rosa.api.DownloadAgent.DownloadReactor;
 import org.jocean.rosa.api.DownloadAgent.DownloadTask;
-import org.jocean.rosa.api.RemoteContentAgent.Content;
 import org.jocean.rosa.api.RemoteContentAgent;
 import org.jocean.rosa.api.TransactionPolicy;
 import org.slf4j.Logger;
