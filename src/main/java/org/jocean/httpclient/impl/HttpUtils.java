@@ -196,6 +196,10 @@ public class HttpUtils {
 				final HttpObject msg) throws Exception {
 			super.channelRead0(ctx, msg);
 			
+            if ( LOG.isTraceEnabled() ) {
+                LOG.trace("channelRead0: ch({}) with httpObj:{}", ctx.channel(), msg);
+            }
+            
 	        if (msg instanceof HttpResponse) {
     			this._receiver.acceptEvent(HttpEvents.HTTPRESPONSERECEIVED, ctx, (HttpResponse) msg);
 	        }

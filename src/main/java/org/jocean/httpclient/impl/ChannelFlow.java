@@ -130,7 +130,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 final Requirement requirement, 
                 final ChannelRecommendReactor reactor) {
             if ( reactor.isRecommendInProgress() ) {
-                if ( isCurrentDomainEquals(requirement.uri()) ) {
+                if ( isCurrentDomainMatch(requirement.uri()) ) {
                     if (LOG.isTraceEnabled()) {
                         LOG.trace("channelFlow({})/{}/{} recommend self as IDLE_AND_MATCH for requirement({})",
                                 ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
@@ -215,20 +215,19 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             notifyGuideForChannelLostAndUnbind();
             notifyGuideForBinded(guideReceiver);
             
-            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
-            if (isCurrentDomainEquals( toBindedDomain )) {
+            if (isCurrentDomainMatch( requirement.uri() )) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has SAME domain, channel({}) can be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
                 return currentEventHandler();
             } else {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has MISMATCH domain, channel({}) can !NOT! be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
@@ -325,21 +324,20 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             notifyGuideForChannelLostAndUnbind();
             notifyGuideForBinded(guideReceiver);
             
-            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
-            if (isCurrentDomainEquals( toBindedDomain )) {
+            if (isCurrentDomainMatch( requirement.uri() )) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has SAME domain, channel({}) can be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
                 notifyGuideForHttpClientObtained();
                 return currentEventHandler();
             } else {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has MISMATCH domain, channel({}) can !NOT! be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
@@ -538,19 +536,18 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             }
             
             notifyGuideForBinded(guideReceiver);
-            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
-            if (isCurrentDomainEquals( toBindedDomain )) {
+            if (isCurrentDomainMatch( requirement.uri() )) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has SAME domain, channel({}) can be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
             } else {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has MISMATCH domain, channel({}) can !NOT! be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
@@ -579,12 +576,11 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             }
             
             notifyGuideForBinded(guideReceiver);
-            final URI toBindedDomain = _toolkit.genDomainByURI(requirement.uri());
-            if (isCurrentDomainEquals( toBindedDomain )) {
+            if (isCurrentDomainMatch( requirement.uri() )) {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the SAME domain({}) guideFlow, channel({}) can be reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has SAME domain, channel({}) can be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 updateBindedGuideFlow(guideReceiver, requirement);
                 notifyGuideForHttpClientObtained();
@@ -592,9 +588,9 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 return BINDED_ACTIVED;
             } else {
                 if (LOG.isDebugEnabled()) {
-                    LOG.debug("channelFlow({})/{}/{} binded the OTHER domain({}) guideFlow, channel({}) can !NOT! reused",
+                    LOG.debug("channelFlow({})/{}/{} binded guideFlow's uri({}) has MISMATCH domain, channel({}) can !NOT! be reused",
                             ChannelFlow.this, currentEventHandler().getName(), currentEvent(),
-                            toBindedDomain, _channel);
+                            requirement.uri(), _channel);
                 }
                 // close detach previous channel and re-try
                 closeAndDetachCurrentChannel();
@@ -671,8 +667,8 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
      * @param domain
      * @return
      */
-    private boolean isCurrentDomainEquals(final URI domain) {
-        return this._domain.equals(domain);
+    private boolean isCurrentDomainMatch(final URI uri) {
+        return this._domain.equals( this._toolkit.genDomainByURI(uri));
     }
 
     /**
