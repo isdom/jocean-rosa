@@ -52,7 +52,7 @@
         <dependency org="org.jocean" name="jocean-event-api" rev="0.0.6-SNAPSHOT" 
             conf="compile->default(*)" changing="true"/>
         
-        <dependency org="io.netty" name="netty-all" rev="4.0.18.Final" 
+        <dependency org="io.netty" name="netty-all" rev="4.0.23.Final" 
             conf="compile->defalut(*)" transitive="false"/>
         
         <dependency org="com.alibaba" name="fastjson" rev="1.1.39" 
