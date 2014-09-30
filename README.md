@@ -4,7 +4,7 @@ jocean-rosa
 jocean's rosa: Remote Operations Service Agent
 
 实现基于HTTP交互的 信令 和 文件 上下行 封装。
-主要基于 jocean-idiom、jocean-event-api、jocean-transportclient 实现，其 异步nio使用 netty 4.x (目前使用 4.0.18.Final)
+主要基于 jocean-idiom、jocean-event-api、jocean-transportclient 实现，其 异步nio使用 netty 4.x (目前使用 4.0.23.Final)
 
 TODO:
   1、在 DownloadFlow 中根据 HttpResponse 返回的
@@ -13,6 +13,12 @@ TODO:
     Cache-Control: max-age=679065
   等字段信息进行细致的缓存的超时控制。
 
+2014-09-30:  release 0.0.9 版本：
+  1、重构httpclient部分的实现代码，将原有通过MediatorFlow 实现的 协调 Guide & Channel 之间的业务逻辑，调整为主要由 Guide & Channel之间直接通讯完成。
+  2、用 Mediator 代替 MediatorFlow 实现 协调guide & channel 的业务逻辑，从原先的事件处理方式 更改为多线程下可重入的方法调用
+  3、fix bug: 对于实际上匹配的既有domain 的 uri，因为缺省端口号没有明确写出(http-80,https-443)导致判断为不同的domain，而对于redommend消息，误返回recommend level 为IDLE_BUT_NOT_MATCH的情况。
+  4、更新 netty 依赖到 4.0.23.Final 版本(解决问题的版本为 4.0.20.Final)，解决 https 在特殊情况下，握手完成后，解析服务端发过来的数据出现无限循环，并导致频繁GC的问题。导致https信令交互无限等待的BUG。
+  
 2014-08-19:  release 0.0.8 版本：
   1、处理HTTP续传情况下，Http Response 状态码为 416，但仍然返回了 Content-Range头域，并且续传起始字节数和HttpRequest 中的要求字节数是一致的情况，此时，继续正常的续传流程
   2、添加并实现 ContentTask.detachHttpClient 接口方法，具体实现方法是在 DownloadAgent中增加detachHttpClientOf方法，而该方法的实现是向DownloadTask发送 "detachHttpClient"事件
