@@ -68,6 +68,16 @@ public class BusinessServerImpl implements BusinessServerAgent {
 		return flow.queryInterfaceInstance(SignalTransaction.class);
 	}
 
+    @Override
+    public SignalTransaction createSignalTransaction(
+            final HttpRequestProcessor processor) {
+        final SignalTransactionFlow flow = 
+                new SignalTransactionFlow(this._pool, this._stack, this._converter, processor);
+        this._source.create(flow, flow.WAIT);
+        
+        return flow.queryInterfaceInstance(SignalTransaction.class);
+    }
+    
 	public BusinessServerImpl(
             final BytesPool pool,
 	        final HttpStack httpStack, 
@@ -436,5 +446,4 @@ public class BusinessServerImpl implements BusinessServerAgent {
             return null;
         }
     }
-    
 }

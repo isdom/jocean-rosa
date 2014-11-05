@@ -3,7 +3,7 @@
  */
 package org.jocean.rosa.api;
 
-import java.util.HashMap;
+import io.netty.handler.codec.http.HttpRequest;
 
 import org.jocean.idiom.Detachable;
 
@@ -33,8 +33,6 @@ public interface BusinessServerAgent {
 
     public interface SignalTransaction extends Detachable {
 
-        public void addHttpHeaders(final HashMap<String, String> headers);
-
         public <REQUEST, CTX, RESPONSE> void start(
                 final REQUEST request,
                 final CTX ctx,
@@ -44,4 +42,14 @@ public interface BusinessServerAgent {
     }
 
     public SignalTransaction createSignalTransaction();
+    
+    
+    public interface HttpRequestProcessor {
+
+        public <REQUEST, CTX> void beforeHttpRequestSend(
+                final REQUEST request, final CTX ctx, final HttpRequest httpRequest)
+                throws Exception;
+    }
+    
+    public SignalTransaction createSignalTransaction(final HttpRequestProcessor processor);
 }

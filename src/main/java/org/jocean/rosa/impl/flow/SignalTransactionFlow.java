@@ -13,10 +13,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 
 import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.BizStep;
@@ -36,6 +33,7 @@ import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
+import org.jocean.rosa.api.BusinessServerAgent.HttpRequestProcessor;
 import org.jocean.rosa.api.BusinessServerAgent.SignalReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
@@ -65,9 +63,18 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             final BytesPool pool,
             final HttpStack stack,
             final SignalConverter signalConverter) {
+        this(pool, stack, signalConverter, null);
+    }
+
+    public SignalTransactionFlow(
+            final BytesPool pool,
+            final HttpStack stack,
+            final SignalConverter signalConverter, 
+            final HttpRequestProcessor processor) {
         this._bytesStream = new PooledBytesOutputStream(pool);
         this._stack = stack;
         this._converter = signalConverter;
+        this._httpRequestProcessor = processor;
 
         addFlowLifecycleListener(new FlowLifecycleListener<SignalTransactionFlow>() {
 
@@ -88,6 +95,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
                 notifyReactorFailureIfNeeded();
             }
         });
+        
     }
 
     private final Object ON_HTTPLOST = new Object() {
@@ -120,12 +128,6 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
     }
 
     public final BizStep WAIT = new BizStep("signal.WAIT") {
-
-        @OnEvent(event = "addHttpHeaders")
-        private BizStep addHttpHeaders(final HashMap<String, String> headers) {
-            _reqHeaders = headers;
-            return WAIT;
-        }
 
         @OnEvent(event = "start")
         private BizStep onSignalTransactionStart(
@@ -160,8 +162,8 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             return OBTAINING;
         }
     }
-            .handler(handlersOf(ON_DETACH))
-            .freeze();
+    .handler(handlersOf(ON_DETACH))
+    .freeze();
 
     private final BizStep OBTAINING = new BizStep("signal.OBTAINING") {
         @OnEvent(event = "onHttpClientObtained")
@@ -174,7 +176,16 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
                     _converter.processHttpRequest(_request,
                             genHttpRequest(_uri));
 
-            appendHeaders(request);
+            if ( null != request && null != _httpRequestProcessor ) {
+                try {
+                    _httpRequestProcessor.beforeHttpRequestSend(_request, _ctx, request);
+                } catch (Exception e) {
+                    LOG.warn(
+                            "state({})/{}: exception when ({}).beforeHttpRequestSend, detail:{}",
+                            currentEventHandler().getName(), currentEvent(), _httpRequestProcessor,
+                            ExceptionUtils.exception2detail(e));
+                }
+            }
 
             if (LOG.isDebugEnabled()) {
                 LOG.debug("send http request {}", request);
@@ -193,9 +204,9 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             return RECVRESP;
         }
     }
-            .handler(handlersOf(ON_HTTPLOST))
-            .handler(handlersOf(ON_DETACH))
-            .freeze();
+    .handler(handlersOf(ON_HTTPLOST))
+    .handler(handlersOf(ON_DETACH))
+    .freeze();
 
     private final BizStep RECVRESP = new BizStep("signal.RECVRESP") {
         @OnEvent(event = "onHttpResponseReceived")
@@ -220,9 +231,9 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             }
         }
     }
-            .handler(handlersOf(ON_HTTPLOST))
-            .handler(handlersOf(ON_DETACH))
-            .freeze();
+    .handler(handlersOf(ON_HTTPLOST))
+    .handler(handlersOf(ON_DETACH))
+    .freeze();
 
     private final BizStep RECVCONTENT = new BizStep("signal.RECVCONTENT") {
         @OnEvent(event = "onHttpContentReceived")
@@ -314,9 +325,9 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             return null;
         }
     }
-            .handler(handlersOf(ON_HTTPLOST))
-            .handler(handlersOf(ON_DETACH))
-            .freeze();
+    .handler(handlersOf(ON_HTTPLOST))
+    .handler(handlersOf(ON_DETACH))
+    .freeze();
 
     private final BizStep SCHEDULE = new BizStep("signal.SCHEDULE") {
         @OnEvent(event = "detach")
@@ -338,7 +349,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
             return OBTAINING;
         }
     }
-            .freeze();
+    .freeze();
 
     private BizStep incRetryAndSelectStateByRetry() {
         this._retryCount++;
@@ -527,21 +538,9 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
         return ret;
     }
 
-    protected void appendHeaders(HttpRequest request) {
-        if (null == _reqHeaders) {
-            return;
-        }
-        Iterator<Entry<String, String>> iter = _reqHeaders.entrySet()
-                .iterator();
-        while (iter.hasNext()) {
-            Entry<String, String> pair = iter.next();
-            request.headers().add(pair.getKey(), pair.getValue());
-        }
-    }
-
     private final HttpStack _stack;
     private final SignalConverter _converter;
-    private HashMap<String, String> _reqHeaders = null;
+    private final HttpRequestProcessor _httpRequestProcessor;
     private Object _request;
     private URI _uri;
     private Class<?> _respCls;
