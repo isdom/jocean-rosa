@@ -1,0 +1,24 @@
+apply from: 'http://hbdev.widget-inc.com:8080/devconf/build-lib.gradle'
+
+configurations {
+    all*.exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    all*.exclude group: 'log4j', module: 'log4j'
+    all*.exclude group: 'commons-logging', module: 'commons-logging'
+}
+
+dependencies {
+    /* log */
+    compile "org.slf4j:slf4j-api:1.7.7"
+    
+    /* 3rd libs */
+    compile "javax.ws.rs:javax.ws.rs-api:2.0"
+    compile "io.netty:netty-all:4.0.23.Final"
+    compile "com.alibaba:fastjson:1.1.39"
+    compile "com.jcraft:jzlib:1.1.2"
+    compile "com.jakewharton:disklrucache:2.0.2"
+
+    /* jocean */
+    compile "org.jocean:jocean-idiom:0.1.3-SNAPSHOT"
+    compile "org.jocean:jocean-event-api:0.0.7-SNAPSHOT"
+    
+}
