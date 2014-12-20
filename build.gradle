@@ -12,7 +12,7 @@ dependencies {
     
     /* 3rd libs */
     compile "javax.ws.rs:javax.ws.rs-api:2.0"
-    compile "io.netty:netty-all:4.0.23.Final"
+    compile "io.netty:netty-all:4.0.24.Final"
     compile "com.alibaba:fastjson:1.1.39"
     compile "com.jcraft:jzlib:1.1.2"
     compile "com.jakewharton:disklrucache:2.0.2"
