@@ -6,6 +6,7 @@ package org.jocean.httpclient.impl;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -369,8 +370,8 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             _userCtx = userCtx;
             _httpReactor = reactor;
             
-            request.headers().set(HttpHeaders.Names.CONNECTION,
-                    HttpHeaders.Values.KEEP_ALIVE);
+//            request.headers().set(HttpHeaders.Names.CONNECTION,
+//                    HttpHeaders.Values.KEEP_ALIVE);
             _channel.writeAndFlush(request);
             if (LOG.isDebugEnabled()) {
                 LOG.debug("({})/{}/{}: sendHttpRequest: {}", 
@@ -427,6 +428,26 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             createChannelAndConnectBy(guideReceiver, requirement);
 
             return BINDED_CONNECTING;
+        }
+        
+        @OnEvent(event = "sendHttpContent")
+        private BizStep sendHttpContent(
+                final int currentHttpClientId,
+                final HttpContent content
+                ) {
+            if ( !isValidHttpClientId(currentHttpClientId) ) {
+                return currentEventHandler();
+            }
+            
+            _channel.writeAndFlush(content);
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("({})/{}/{}: sendHttpContent: {}", 
+                        ChannelFlow.this, 
+                        currentEventHandler().getName(), 
+                        currentEvent(), 
+                        content);
+            }
+            return currentEventHandler();
         }
         
         @OnEvent(event = HttpEvents.HTTPRESPONSERECEIVED)
@@ -797,6 +818,12 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                     throws Exception {
                 selfEventReceiver().acceptEvent(
                         "sendHttpRequest", currentHttpClientId, userCtx, request, reactor);
+            }
+
+            @Override
+            public void sendHttpContent(final HttpContent content) throws Exception {
+                selfEventReceiver().acceptEvent(
+                        "sendHttpContent", currentHttpClientId, content);
             }
         };
     }

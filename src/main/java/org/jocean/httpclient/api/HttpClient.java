@@ -3,6 +3,7 @@
  */
 package org.jocean.httpclient.api;
 
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 
@@ -35,4 +36,11 @@ public interface HttpClient {
 	 */
 	public <CTX> void sendHttpRequest(final CTX ctx, final HttpRequest request, final HttpReactor<CTX> reactor) 
 	        throws Exception;
+
+    /**
+     * 发送 Http Content
+     * @param content
+     */
+    public void sendHttpContent(final HttpContent content) 
+            throws Exception;
 }
