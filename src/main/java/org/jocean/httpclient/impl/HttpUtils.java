@@ -28,6 +28,7 @@ import java.net.URI;
 import javax.net.ssl.SSLEngine;
 
 import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.PairedGuardEventable;
 import org.jocean.event.api.RefcountedGuardEventable;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -37,6 +38,7 @@ import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.EventReceiverInboundHandler;
 import org.jocean.netty.NettyEvents;
+import org.jocean.netty.NettyUtils;
 import org.jocean.ssl.FixNeverReachFINISHEDStateSSLEngine;
 import org.jocean.ssl.SecureChatSslContextFactory;
 import org.slf4j.Logger;
@@ -144,6 +146,9 @@ public class HttpUtils {
     
 	private static final class HttpHandler extends EventReceiverInboundHandler<HttpObject> {
 	    
+        private static final PairedGuardEventable HTTPRESPONSERECEIVED_EVENT = 
+                new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, HttpEvents.HTTPRESPONSERECEIVED);
+        
 		private static final RefcountedGuardEventable HTTPCONTENTRECEIVED_EVENT = 
 		        new RefcountedGuardEventable(HttpEvents.HTTPCONTENTRECEIVED);
 
@@ -201,7 +206,7 @@ public class HttpUtils {
             }
             
 	        if (msg instanceof HttpResponse) {
-    			this._receiver.acceptEvent(HttpEvents.HTTPRESPONSERECEIVED, ctx, (HttpResponse) msg);
+    			this._receiver.acceptEvent(HTTPRESPONSERECEIVED_EVENT, ctx, (HttpResponse) msg);
 	        }
 	        if (msg instanceof HttpContent) {
                 final Blob blob = httpContent2Blob((HttpContent)msg);

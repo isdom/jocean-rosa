@@ -7,6 +7,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 
 import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.PairedGuardEventable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +21,9 @@ public abstract class EventReceiverInboundHandler<I> extends
 	private static final Logger LOG =
 			LoggerFactory.getLogger(EventReceiverInboundHandler.class);
 	
+    private static final PairedGuardEventable CHANNEL_MESSAGERECEIVED_EVENT = 
+            new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, NettyEvents.CHANNEL_MESSAGERECEIVED);
+    
 	public EventReceiverInboundHandler(final EventReceiver receiver) {
 		this._receiver = receiver;
 	}
@@ -120,7 +124,7 @@ public abstract class EventReceiverInboundHandler<I> extends
 			LOG.debug("messageReceived: ch{}, msg:{}", ctx.channel(), msg );
 		}
 		
-		this._receiver.acceptEvent(NettyEvents.CHANNEL_MESSAGERECEIVED, ctx, msg);
+		this._receiver.acceptEvent(CHANNEL_MESSAGERECEIVED_EVENT, ctx, msg);
 	}
 
 	protected final EventReceiver _receiver;

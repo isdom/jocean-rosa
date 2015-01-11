@@ -7,6 +7,7 @@ import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 
+import org.jocean.event.api.annotation.GuardPaired;
 import org.jocean.event.api.annotation.GuardReferenceCounted;
 import org.jocean.idiom.block.Blob;
 
@@ -18,6 +19,7 @@ public interface HttpClient {
 	
     public interface HttpReactor<CTX> {
         
+        @GuardPaired(paired={"org.jocean.netty.NettyUtils._NETTY_REFCOUNTED_GUARD"})
         public void onHttpResponseReceived(final CTX ctx, final HttpResponse response) 
                 throws Exception;
 
@@ -34,6 +36,7 @@ public interface HttpClient {
 	 * 发送 Http Request
 	 * @param request
 	 */
+    @GuardPaired(paired={"org.jocean.netty.NettyUtils._NETTY_REFCOUNTED_GUARD"})
 	public <CTX> void sendHttpRequest(final CTX ctx, final HttpRequest request, final HttpReactor<CTX> reactor) 
 	        throws Exception;
 
@@ -41,6 +44,7 @@ public interface HttpClient {
      * 发送 Http Content
      * @param content
      */
+    @GuardPaired(paired={"org.jocean.netty.NettyUtils._NETTY_REFCOUNTED_GUARD"})
     public void sendHttpContent(final HttpContent content) 
             throws Exception;
 }

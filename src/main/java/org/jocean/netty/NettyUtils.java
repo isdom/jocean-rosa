@@ -4,7 +4,9 @@
 package org.jocean.netty;
 
 import io.netty.channel.Channel;
+import io.netty.util.ReferenceCounted;
 
+import org.jocean.idiom.PairedVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,4 +41,25 @@ public class NettyUtils {
             //_bootstrap.group().shutdownGracefully();
 		}
     }
+
+    public static PairedVisitor<Object> _NETTY_REFCOUNTED_GUARD = new PairedVisitor<Object>() {
+
+        @Override
+        public void visitBegin(final Object obj) {
+            if ( obj instanceof ReferenceCounted ) {
+                ((ReferenceCounted)obj).retain();
+            }
+        }
+
+        @Override
+        public void visitEnd(final Object obj) {
+            if ( obj instanceof ReferenceCounted ) {
+                ((ReferenceCounted)obj).release();
+            }
+        }
+        
+        @Override
+        public String toString() {
+            return "NettyUtils._NETTY_REFCOUNTED_GUARD";
+        }};
 }
