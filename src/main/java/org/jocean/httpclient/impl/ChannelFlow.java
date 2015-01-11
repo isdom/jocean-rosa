@@ -21,6 +21,7 @@ import org.jocean.event.api.AbstractUnhandleAware;
 import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.EventUnhandleException;
+import org.jocean.event.api.PairedGuardEventable;
 import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.httpclient.api.Guide.Requirement;
 import org.jocean.httpclient.api.HttpClient;
@@ -33,6 +34,7 @@ import org.jocean.idiom.ValidationId;
 import org.jocean.idiom.block.Blob;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.NettyEvents;
+import org.jocean.netty.NettyUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -808,6 +810,12 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         }
     }
     
+    private static final PairedGuardEventable SENDHTTPREQUEST_EVENT = 
+            new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, "sendHttpRequest");
+    
+    private static final PairedGuardEventable SENDHTTPCONTENT_EVENT = 
+            new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, "sendHttpContent");
+    
     private HttpClient generateHttpClientFor(final int currentHttpClientId) {
         return new HttpClient() {
             @Override
@@ -817,13 +825,13 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                     final HttpReactor<CTX> reactor)
                     throws Exception {
                 selfEventReceiver().acceptEvent(
-                        "sendHttpRequest", currentHttpClientId, userCtx, request, reactor);
+                        SENDHTTPREQUEST_EVENT, currentHttpClientId, userCtx, request, reactor);
             }
 
             @Override
             public void sendHttpContent(final HttpContent content) throws Exception {
                 selfEventReceiver().acceptEvent(
-                        "sendHttpContent", currentHttpClientId, content);
+                        SENDHTTPCONTENT_EVENT, currentHttpClientId, content);
             }
         };
     }
