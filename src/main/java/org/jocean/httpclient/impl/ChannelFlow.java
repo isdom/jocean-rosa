@@ -10,6 +10,7 @@ import io.netty.handler.codec.http.HttpContent;
 //import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import java.net.InetSocketAddress;
@@ -374,7 +375,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             
 //            request.headers().set(HttpHeaders.Names.CONNECTION,
 //                    HttpHeaders.Values.KEEP_ALIVE);
-            _channel.writeAndFlush(request);
+            _channel.writeAndFlush(ReferenceCountUtil.retain(request));
             if (LOG.isDebugEnabled()) {
                 LOG.debug("({})/{}/{}: sendHttpRequest: {}", 
                         ChannelFlow.this, 
@@ -433,7 +434,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         }
         
         @OnEvent(event = "sendHttpContent")
-        private BizStep sendHttpContent(
+        private BizStep onSendHttpContent(
                 final int currentHttpClientId,
                 final HttpContent content
                 ) {
@@ -441,7 +442,7 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
                 return currentEventHandler();
             }
             
-            _channel.writeAndFlush(content);
+            _channel.writeAndFlush(ReferenceCountUtil.retain(content));
             if (LOG.isDebugEnabled()) {
                 LOG.debug("({})/{}/{}: sendHttpContent: {}", 
                         ChannelFlow.this, 
