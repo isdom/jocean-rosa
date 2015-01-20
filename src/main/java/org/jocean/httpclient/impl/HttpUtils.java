@@ -5,6 +5,7 @@ package org.jocean.httpclient.impl;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufInputStream;
+import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
@@ -310,5 +311,21 @@ public class HttpUtils {
                 // just ignore
             }
         }
-    }	        
+    }
+    
+    /**
+     * @param contentBlob
+     * @return
+     * @throws IOException
+     */
+    public static ByteBuf blob2ByteBuf(final Blob contentBlob) throws IOException {
+        byte[] bytes = new byte[0];
+        if ( null != contentBlob ) {
+            final InputStream is = contentBlob.genInputStream();
+            bytes = new byte[is.available()];
+            is.read(bytes);
+            is.close();
+        }
+        return Unpooled.wrappedBuffer(bytes);
+    }
 }
