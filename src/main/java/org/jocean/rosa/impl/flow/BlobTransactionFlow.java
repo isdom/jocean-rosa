@@ -4,12 +4,14 @@
 package org.jocean.rosa.impl.flow;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -375,25 +377,27 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
     }
 
     @OnEvent(event = "onHttpContentReceived")
-	private BizStep contentReceived(final int httpClientId, final Blob contentBlob) {
+	private BizStep contentReceived(final int httpClientId, final HttpContent content) {
         if ( !isValidHttpClientId(httpClientId)) {
             return this.currentEventHandler();
         }
-        updateAndNotifyCurrentProgress(
-                BlockUtils.blob2OutputStream(contentBlob, this._bytesStream));
         
+        updateAndNotifyCurrentProgress(
+                HttpUtils.byteBuf2OutputStream(content.content(), this._bytesStream));
+            
 		return RECVCONTENT;
 	}
 
 
 	@OnEvent(event = "onLastHttpContentReceived")
-	private BizStep lastContentReceived(final int httpClientId, final Blob contentBlob) 
+	private BizStep lastContentReceived(final int httpClientId, final LastHttpContent content) 
 	        throws Exception {
         if ( !isValidHttpClientId(httpClientId)) {
             return this.currentEventHandler();
         }
+        
         updateAndNotifyCurrentProgress(
-                BlockUtils.blob2OutputStream(contentBlob, this._bytesStream));
+                HttpUtils.byteBuf2OutputStream(content.content(), this._bytesStream));
         
         safeDetachHttpHandle();
 

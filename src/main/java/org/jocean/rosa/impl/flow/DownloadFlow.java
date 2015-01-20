@@ -4,12 +4,14 @@
 package org.jocean.rosa.impl.flow;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -31,6 +33,7 @@ import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
 import org.jocean.idiom.block.Blob;
+import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.DownloadAgent.DownloadReactor;
 import org.jocean.rosa.api.TransactionConstants;
 import org.jocean.rosa.api.TransactionPolicy;
@@ -47,8 +50,11 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 	private static final Logger LOG = LoggerFactory
 			.getLogger(DownloadFlow.class);
 
-    public DownloadFlow(final HttpStack stack) {
+    public DownloadFlow(
+            final BytesPool pool,
+            final HttpStack stack) {
         this._stack = stack;
+        this._bytesPool = pool;
         
         addFlowLifecycleListener(new FlowLifecycleListener<DownloadFlow>() {
 
@@ -276,29 +282,44 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 	
 	private final BizStep RECVCONTENT = new BizStep("download.RECVCONTENT") {
 	    @OnEvent(event = "onHttpContentReceived")
-	    private BizStep contentReceived(final int httpClientId, final Blob contentBlob) 
-	            throws Exception {
-	        if ( !isValidHttpClientId(httpClientId)) {
-	            return currentEventHandler();
-	        }
-	        if ( !updateDownloadableContent(contentBlob) ) {
-	            return null;
-	        }
-	        else {
-	            return RECVCONTENT;
-	        }
-	    }
-	    
-	    @OnEvent(event = "onLastHttpContentReceived")
-	    private BizStep lastContentReceived(final int httpClientId, final Blob contentBlob) 
+	    private BizStep contentReceived(final int httpClientId, final HttpContent content) 
 	            throws Exception {
 	        if ( !isValidHttpClientId(httpClientId)) {
 	            return currentEventHandler();
 	        }
 	        
-	        if ( !updateDownloadableContent(contentBlob) ) {
-	            return null;
+	        final Blob blob = HttpUtils.httpContent2Blob(_bytesPool, content);
+	        try {
+    	        if ( !updateDownloadableContent(blob) ) {
+    	            return null;
+    	        }
+    	        else {
+    	            return RECVCONTENT;
+    	        }
+	        } finally {
+	            if (null != blob ) {
+	                blob.release();
+	            }
 	        }
+	    }
+	    
+	    @OnEvent(event = "onLastHttpContentReceived")
+	    private BizStep lastContentReceived(final int httpClientId, final LastHttpContent content) 
+	            throws Exception {
+	        if ( !isValidHttpClientId(httpClientId)) {
+	            return currentEventHandler();
+	        }
+	        
+            final Blob blob = HttpUtils.httpContent2Blob(_bytesPool, content);
+            try {
+    	        if ( !updateDownloadableContent(blob) ) {
+    	            return null;
+    	        }
+            } finally {
+                if (null != blob ) {
+                    blob.release();
+                }
+            }
 	        
 	        safeDetachHttpGuide();
 
@@ -626,6 +647,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 
     private Downloadable _downloadable;
     private final HttpStack _stack;
+    private final BytesPool _bytesPool;
 	private int    _maxRetryCount = -1;
 	private int    _retryCount = 0;
     private long   _timeoutFromActived = -1;

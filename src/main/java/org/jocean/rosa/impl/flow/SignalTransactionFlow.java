@@ -4,11 +4,13 @@
 package org.jocean.rosa.impl.flow;
 
 import io.netty.handler.codec.http.DefaultFullHttpRequest;
+import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.codec.http.LastHttpContent;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -26,11 +28,11 @@ import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
+import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
 import org.jocean.idiom.block.Blob;
-import org.jocean.idiom.block.BlockUtils;
 import org.jocean.idiom.block.PooledBytesOutputStream;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BusinessServerAgent.HttpRequestProcessor;
@@ -238,21 +240,24 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
     private final BizStep RECVCONTENT = new BizStep("signal.RECVCONTENT") {
         @OnEvent(event = "onHttpContentReceived")
         private BizStep contentReceived(final int httpClientId,
-                final Blob contentBlob) {
+                final HttpContent content) {
             if (!isValidHttpClientId(httpClientId)) {
                 return currentEventHandler();
             }
-            BlockUtils.blob2OutputStream(contentBlob, _bytesStream);
+            
+            HttpUtils.byteBuf2OutputStream(content.content(), _bytesStream);
+            
             return RECVCONTENT;
         }
 
         @OnEvent(event = "onLastHttpContentReceived")
         private BizStep lastContentReceived(final int httpClientId,
-                final Blob contentBlob) throws Exception {
+                final LastHttpContent content) throws Exception {
             if (!isValidHttpClientId(httpClientId)) {
                 return currentEventHandler();
             }
-            BlockUtils.blob2OutputStream(contentBlob, _bytesStream);
+            
+            HttpUtils.byteBuf2OutputStream(content.content(), _bytesStream);
 
             safeDetachHttpHandle();
 

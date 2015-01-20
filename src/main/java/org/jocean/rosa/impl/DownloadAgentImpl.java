@@ -4,6 +4,7 @@ import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.httpclient.HttpStack;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.DownloadAgent;
 import org.jocean.rosa.impl.flow.DownloadFlow;
 import org.slf4j.Logger;
@@ -16,15 +17,17 @@ public class DownloadAgentImpl implements DownloadAgent {
     
     @Override
     public DownloadTask createDownloadTask() {
-        final DownloadFlow flow = new DownloadFlow( this._stack);
+        final DownloadFlow flow = new DownloadFlow(this._pool, this._stack);
         this._source.create(flow, flow.WAIT);
         
         return flow.queryInterfaceInstance(DownloadTask.class);
     }
     
     public DownloadAgentImpl(
+            final BytesPool pool,
             final HttpStack httpStack, 
             final EventReceiverSource source) {
+        this._pool = pool;
         this._stack = httpStack;
         this._source = source;
     }
@@ -41,6 +44,7 @@ public class DownloadAgentImpl implements DownloadAgent {
         }
     }
     
+    private final BytesPool _pool;
     private final HttpStack _stack;
     private final EventReceiverSource _source;
 

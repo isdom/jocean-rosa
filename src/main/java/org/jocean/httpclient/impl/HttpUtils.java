@@ -29,7 +29,6 @@ import javax.net.ssl.SSLEngine;
 
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.PairedGuardEventable;
-import org.jocean.event.api.RefcountedGuardEventable;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.block.Blob;
@@ -149,19 +148,17 @@ public class HttpUtils {
         private static final PairedGuardEventable HTTPRESPONSERECEIVED_EVENT = 
                 new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, HttpEvents.HTTPRESPONSERECEIVED);
         
-		private static final RefcountedGuardEventable HTTPCONTENTRECEIVED_EVENT = 
-		        new RefcountedGuardEventable(HttpEvents.HTTPCONTENTRECEIVED);
+		private static final PairedGuardEventable HTTPCONTENTRECEIVED_EVENT = 
+                new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, HttpEvents.HTTPCONTENTRECEIVED);
 
-        private static final RefcountedGuardEventable LASTHTTPCONTENTRECEIVED_EVENT = 
-		        new RefcountedGuardEventable(HttpEvents.LASTHTTPCONTENTRECEIVED);
+        private static final PairedGuardEventable LASTHTTPCONTENTRECEIVED_EVENT = 
+                new PairedGuardEventable(NettyUtils._NETTY_REFCOUNTED_GUARD, HttpEvents.LASTHTTPCONTENTRECEIVED);
 		
         private final boolean _sslEnabled;
-		private final BytesPool _bytesPool;
 		
-		public HttpHandler(final BytesPool bytesPool, final EventReceiver receiver, final boolean sslEnabled) {
+		public HttpHandler(final EventReceiver receiver, final boolean sslEnabled) {
 			super(receiver);
 			this._sslEnabled = sslEnabled;
-			this._bytesPool = bytesPool;
 		}
 		
 		@Override
@@ -206,55 +203,27 @@ public class HttpUtils {
             }
             
 	        if (msg instanceof HttpResponse) {
-    			this._receiver.acceptEvent(HTTPRESPONSERECEIVED_EVENT, ctx, (HttpResponse) msg);
+    			this._receiver.acceptEvent(HTTPRESPONSERECEIVED_EVENT, ctx, msg);
 	        }
 	        if (msg instanceof HttpContent) {
-                final Blob blob = httpContent2Blob((HttpContent)msg);
-                try {
-                    if (msg instanceof LastHttpContent) {
-                        this._receiver.acceptEvent(LASTHTTPCONTENTRECEIVED_EVENT, ctx, blob);
-                    }
-                    else {
-                        this._receiver.acceptEvent(HTTPCONTENTRECEIVED_EVENT, ctx, blob);
-                    }
+//                final Blob blob = httpContent2Blob((HttpContent)msg);
+//                try {
+                if (msg instanceof LastHttpContent) {
+                    this._receiver.acceptEvent(LASTHTTPCONTENTRECEIVED_EVENT, ctx, msg);
+                } else {
+                    this._receiver.acceptEvent(HTTPCONTENTRECEIVED_EVENT, ctx, msg);
                 }
-                finally {
-                    if (null!= blob) {
-                        blob.release();
-                    }
-                }
+//                }
+//                finally {
+//                    if (null!= blob) {
+//                        blob.release();
+//                    }
+//                }
 	        }
 		}
 
-        private Blob httpContent2Blob(final HttpContent content) throws Exception {
-            final PooledBytesOutputStream os = new PooledBytesOutputStream(this._bytesPool);
-            if ( byteBuf2OutputStream(content.content(), os) > 0 ) {
-                return os.drainToBlob();
-            }
-            else {
-                return null;
-            }
-        }
 	}
 	
-    /**
-     * @param buf
-     * @param os
-     */
-    private static long byteBuf2OutputStream(final ByteBuf buf, final PooledBytesOutputStream os) {
-        final InputStream is = new ByteBufInputStream(buf);
-        try {
-            return BlockUtils.inputStream2OutputStream(is, os);
-        }
-        finally {
-            try {
-                is.close();
-            } catch (IOException e) {
-                // just ignore
-            }
-        }
-    }
-    
 	static boolean ENABLE_HTTP_LOG = false;
 	
 	static public void enableHttpTransportLog(final boolean enabled) {
@@ -265,7 +234,6 @@ public class HttpUtils {
 	static Detachable addHttpCodecToChannel(
 			final Channel channel, 
 			final URI uri, 
-			final BytesPool bytesPool,
 			final EventReceiver eventReceiver) {
         // Create a default pipeline implementation.
         final ChannelPipeline p = channel.pipeline();
@@ -295,7 +263,7 @@ public class HttpUtils {
         //p.addLast("aggregator", new HttpObjectAggregator(1048576));
 
         if ( null != eventReceiver ) {
-            final HttpHandler handler = new HttpHandler(bytesPool, eventReceiver, sslEnabled);
+            final HttpHandler handler = new HttpHandler(eventReceiver, sslEnabled);
             
         	p.addLast("handler", handler);
         	
@@ -313,4 +281,34 @@ public class HttpUtils {
         }
 	}
 
+    public static Blob httpContent2Blob(
+            final BytesPool bytesPool,
+            final HttpContent content) {
+        final PooledBytesOutputStream os = new PooledBytesOutputStream(
+                bytesPool);
+        if (byteBuf2OutputStream(content.content(), os) > 0) {
+            return os.drainToBlob();
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * @param buf
+     * @param os
+     */
+    public static long byteBuf2OutputStream(
+            final ByteBuf buf,
+            final PooledBytesOutputStream os) {
+        final InputStream is = new ByteBufInputStream(buf);
+        try {
+            return BlockUtils.inputStream2OutputStream(is, os);
+        } finally {
+            try {
+                is.close();
+            } catch (IOException e) {
+                // just ignore
+            }
+        }
+    }	        
 }

@@ -6,7 +6,6 @@ package org.jocean.httpclient;
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.impl.Mediator;
-import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.NettyClient;
 
 /**
@@ -19,20 +18,18 @@ public class HttpStack {
 //			LoggerFactory.getLogger(HttpStack.class);
 
     public HttpStack(
-            final BytesPool bytesPool,
             final EventReceiverSource source,
             final NettyClient client, 
             final int maxHttpConnectionCount) {
-        this(bytesPool, source, source, client, maxHttpConnectionCount);
+        this(source, source, client, maxHttpConnectionCount);
     }
 
     public HttpStack(
-            final BytesPool bytesPool,
             final EventReceiverSource source4guide,
             final EventReceiverSource source4channel,
             final NettyClient client, 
             final int maxHttpConnectionCount) {
-        this._mediator = new Mediator(bytesPool, source4guide, source4channel, client, maxHttpConnectionCount);
+        this._mediator = new Mediator(source4guide, source4channel, client, maxHttpConnectionCount);
     }
     
     public Guide createHttpClientGuide() {

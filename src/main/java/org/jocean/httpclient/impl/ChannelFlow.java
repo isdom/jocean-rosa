@@ -7,9 +7,9 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.http.HttpContent;
-//import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.GenericFutureListener;
 
@@ -32,12 +32,11 @@ import org.jocean.httpclient.impl.HttpUtils.HttpEvents;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.ValidationId;
-import org.jocean.idiom.block.Blob;
-import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.NettyEvents;
 import org.jocean.netty.NettyUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+//import io.netty.handler.codec.http.HttpHeaders;
 
 /**
  * @author isdom
@@ -61,10 +60,9 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     private static final Logger LOG = LoggerFactory
             .getLogger(ChannelFlow.class);
 
-    ChannelFlow(final Publisher publisher, final Toolkit toolkit, final BytesPool bytesPool) {
+    ChannelFlow(final Publisher publisher, final Toolkit toolkit) {
         this._publisher = publisher;
         this._toolkit = toolkit;
-        this._bytesPool = bytesPool;
     }
 
     private boolean canbeInterruptByHighPriority(final int highPriority) {
@@ -477,10 +475,10 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         
         @OnEvent(event = HttpEvents.HTTPCONTENTRECEIVED)
         private BizStep contentReceived(final ChannelHandlerContext ctx,
-                final Blob blob) {
+                final HttpContent content) {
             if (null != _httpReactor) {
                 try {
-                    _httpReactor.onHttpContentReceived(_userCtx, blob);
+                    _httpReactor.onHttpContentReceived(_userCtx, content);
                 } catch (Throwable e) {
                     LOG.warn("exception when invoke uri({})/ctx({})'s onHttpContentReceived, detail:{}",
                             _uri, _userCtx, ExceptionUtils.exception2detail(e));
@@ -495,11 +493,11 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         
         @OnEvent(event = HttpEvents.LASTHTTPCONTENTRECEIVED)
         private BizStep lastContentReceived(
-                final ChannelHandlerContext ctx, final Blob blob)
+                final ChannelHandlerContext ctx,final LastHttpContent content)
                 throws Exception {
             if (null != _httpReactor) {
                 try {
-                    _httpReactor.onLastHttpContentReceived(_userCtx, blob);
+                    _httpReactor.onLastHttpContentReceived(_userCtx, content);
                 } catch (Throwable e) {
                     LOG.warn("exception when invoke uri({})/ctx({})'s onLastHttpContentReceived, detail:{}",
                             _uri, _userCtx, ExceptionUtils.exception2detail(e));
@@ -705,7 +703,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
         this._channelDetacher = HttpUtils.addHttpCodecToChannel(
                 this._channel,
                 this._domain, 
-                this._bytesPool,
                 this.selfEventReceiver());
 
         this._connectFuture = this._channel.connect(new InetSocketAddress(
@@ -863,7 +860,6 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
     private final ValidationId _recommendId = new ValidationId();
     private final Publisher _publisher;
     private final Toolkit _toolkit;
-    private final BytesPool _bytesPool;
     private Channel _channel;
     private Detachable _channelDetacher;
     private ChannelFuture _connectFuture;

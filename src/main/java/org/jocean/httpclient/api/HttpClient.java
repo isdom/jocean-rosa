@@ -6,10 +6,9 @@ package org.jocean.httpclient.api;
 import io.netty.handler.codec.http.HttpContent;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.LastHttpContent;
 
 import org.jocean.event.api.annotation.GuardPaired;
-import org.jocean.event.api.annotation.GuardReferenceCounted;
-import org.jocean.idiom.block.Blob;
 
 /**
  * @author isdom
@@ -22,13 +21,13 @@ public interface HttpClient {
         @GuardPaired(paired={"org.jocean.netty.NettyUtils._NETTY_REFCOUNTED_GUARD"})
         public void onHttpResponseReceived(final CTX ctx, final HttpResponse response) 
                 throws Exception;
-
-        @GuardReferenceCounted
-        public void onHttpContentReceived(final CTX ctx, final Blob blob) 
+        
+        @GuardPaired(paired={"org.jocean.netty.NettyUtils._NETTY_REFCOUNTED_GUARD"})
+        public void onHttpContentReceived(final CTX ctx, final HttpContent content) 
                 throws Exception;
 
-        @GuardReferenceCounted
-        public void onLastHttpContentReceived(final CTX ctx, final Blob blob) 
+        @GuardPaired(paired={"org.jocean.netty.NettyUtils._NETTY_REFCOUNTED_GUARD"})
+        public void onLastHttpContentReceived(final CTX ctx, final LastHttpContent content) 
                 throws Exception;
     }
     

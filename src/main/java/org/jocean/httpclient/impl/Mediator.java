@@ -17,7 +17,6 @@ import org.jocean.event.api.EventReceiverSource;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.idiom.pool.BytesPool;
 import org.jocean.netty.NettyClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +31,10 @@ public class Mediator {
             .getLogger(Mediator.class);
 
     public Mediator(
-            final BytesPool bytesPool, 
             final EventReceiverSource source4guide,
             final EventReceiverSource source4channel, 
             final NettyClient client,
             final int maxChannelCount) {
-        this._bytesPool = bytesPool;
         this._source4guide = source4guide;
         this._source4channel = source4channel;
         this._client = client;
@@ -160,8 +157,7 @@ public class Mediator {
     private ChannelFlow createInactiveChannelFlow() {
         final ChannelFlow channelFlow = new ChannelFlow(
                 this._channelPublisher,
-                this._channelToolkit, 
-                this._bytesPool)
+                this._channelToolkit)
             .addFlowLifecycleListener(this._channelFlowLifecycleListener);
         
         this._source4channel.create(channelFlow, channelFlow.INACTIVE );
@@ -233,7 +229,6 @@ public class Mediator {
     
     private final Queue<GuideFlow> _pendingGuides = new PriorityBlockingQueue<GuideFlow>();
     
-    private final BytesPool _bytesPool;
     private final NettyClient _client;
     private final EventReceiverSource _source4guide;
     private final EventReceiverSource _source4channel;
