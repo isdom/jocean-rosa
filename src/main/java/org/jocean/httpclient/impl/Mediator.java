@@ -16,6 +16,7 @@ import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.httpclient.api.Guide;
+import org.jocean.httpclient.api.HttpClientPool;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.netty.NettyClient;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class Mediator {
+public class Mediator implements HttpClientPool {
     
     private static final Logger LOG = LoggerFactory
             .getLogger(Mediator.class);
@@ -57,6 +58,7 @@ public class Mediator {
         return this._pendingGuides.size();
     }
     
+    @Override
     public Guide createHttpClientGuide() {
         final GuideFlow flow = new GuideFlow(this._guidePublisher);
         
