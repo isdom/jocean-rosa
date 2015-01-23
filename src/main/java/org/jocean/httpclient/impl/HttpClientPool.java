@@ -16,7 +16,7 @@ import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.EventReceiverSource;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.httpclient.api.Guide;
-import org.jocean.httpclient.api.HttpClientPool;
+import org.jocean.httpclient.api.GuideBuilder;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.netty.NettyClient;
 import org.slf4j.Logger;
@@ -26,19 +26,19 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class HttpStack implements HttpClientPool {
+public class HttpClientPool implements GuideBuilder {
     
     private static final Logger LOG = LoggerFactory
-            .getLogger(HttpStack.class);
+            .getLogger(HttpClientPool.class);
 
-    public HttpStack(
+    public HttpClientPool(
             final EventReceiverSource source,
             final NettyClient client,
             final int maxHttpConnectionCount) {
         this(source, source, client, maxHttpConnectionCount);
     }
     
-    public HttpStack(
+    public HttpClientPool(
             final EventReceiverSource source4guide,
             final EventReceiverSource source4channel, 
             final NettyClient client,
@@ -175,11 +175,11 @@ public class HttpStack implements HttpClientPool {
     
     private final ChannelFlow.Toolkit _channelToolkit = new ChannelFlow.Toolkit() {
         public URI genDomainByURI(final URI uri) {
-            return HttpStack.genDomainByURI(uri);
+            return HttpClientPool.genDomainByURI(uri);
         }
         
         public Channel newChannel() {
-            return HttpStack.this._client.newChannel();
+            return HttpClientPool.this._client.newChannel();
         }
     };
     

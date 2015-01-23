@@ -26,7 +26,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.event.api.EventReceiverSource;
-import org.jocean.httpclient.api.HttpClientPool;
+import org.jocean.httpclient.api.GuideBuilder;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
@@ -60,30 +60,30 @@ public class BusinessServerImpl implements BusinessServerAgent {
 
 	//	invoke in main UI thread
     @Override
-	public SignalTransaction createSignalTransaction() {
+	public SignalTask createSignalTask() {
 		final SignalTransactionFlow flow = 
-				new SignalTransactionFlow(this._pool, this._clientPool, this._converter);
+				new SignalTransactionFlow(this._pool, this._guideBuilder, this._converter);
 		this._source.create(flow, flow.WAIT);
 		
-		return flow.queryInterfaceInstance(SignalTransaction.class);
+		return flow.queryInterfaceInstance(SignalTask.class);
 	}
 
     @Override
-    public SignalTransaction createSignalTransaction(
+    public SignalTask createSignalTask(
             final HttpRequestProcessor processor) {
         final SignalTransactionFlow flow = 
-                new SignalTransactionFlow(this._pool, this._clientPool, this._converter, processor);
+                new SignalTransactionFlow(this._pool, this._guideBuilder, this._converter, processor);
         this._source.create(flow, flow.WAIT);
         
-        return flow.queryInterfaceInstance(SignalTransaction.class);
+        return flow.queryInterfaceInstance(SignalTask.class);
     }
     
 	public BusinessServerImpl(
             final BytesPool pool,
-	        final HttpClientPool clientPool, 
+	        final GuideBuilder guideBuilder, 
 			final EventReceiverSource source) {
         this._pool = pool;
-		this._clientPool = clientPool;
+		this._guideBuilder = guideBuilder;
 		this._source = source;
 	}
 	
@@ -108,7 +108,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
     }
 
     private final BytesPool _pool;
-    private final HttpClientPool _clientPool;
+    private final GuideBuilder _guideBuilder;
 	private final EventReceiverSource _source;
 	
 	private final Map<Class<?>, Pair<String, Integer>> _req2pathPrefix = 

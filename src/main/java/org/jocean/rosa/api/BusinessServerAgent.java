@@ -31,7 +31,7 @@ public interface BusinessServerAgent {
                 throws Exception;
     }
 
-    public interface SignalTransaction extends Detachable {
+    public interface SignalTask extends Detachable {
 
         public <REQUEST, CTX, RESPONSE> void start(
                 final REQUEST request,
@@ -41,7 +41,7 @@ public interface BusinessServerAgent {
                 final TransactionPolicy policy);
     }
 
-    public SignalTransaction createSignalTransaction();
+    public SignalTask createSignalTask();
     
     
     public interface HttpRequestProcessor {
@@ -51,5 +51,5 @@ public interface BusinessServerAgent {
                 throws Exception;
     }
     
-    public SignalTransaction createSignalTransaction(final HttpRequestProcessor processor);
+    public SignalTask createSignalTask(final HttpRequestProcessor processor);
 }

@@ -28,7 +28,7 @@ import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
-import org.jocean.httpclient.api.HttpClientPool;
+import org.jocean.httpclient.api.GuideBuilder;
 import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -56,10 +56,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
 
     public BlobTransactionFlow(
             final BytesPool pool,
-            final HttpClientPool clientPool, 
+            final GuideBuilder guideBuilder, 
             final HttpBodyPartRepo repo) {
         this._bytesStream = new PooledBytesOutputStream(pool);
-        this._clientPool = clientPool;
+        this._guideBuilder = guideBuilder;
         this._partRepo = repo;
         
         addFlowLifecycleListener(new FlowLifecycleListener<BlobTransactionFlow>() {
@@ -582,7 +582,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
             }
         }
         
-        this._guide = this._clientPool.createHttpClientGuide();
+        this._guide = this._guideBuilder.createHttpClientGuide();
         
         this._guide.obtainHttpClient(
                 this._guideId.updateIdAndGet(), 
@@ -657,7 +657,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
     
     private URI _uri;
     private final HttpBodyPartRepo _partRepo;
-    private final HttpClientPool _clientPool;
+    private final GuideBuilder _guideBuilder;
 	private int    _maxRetryCount = -1;
 	private int    _retryCount = 0;
     private long   _timeoutFromActived = -1;

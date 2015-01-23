@@ -27,7 +27,7 @@ import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
-import org.jocean.httpclient.api.HttpClientPool;
+import org.jocean.httpclient.api.GuideBuilder;
 import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -52,8 +52,8 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 
     public DownloadFlow(
             final BytesPool pool,
-            final HttpClientPool clientPool) {
-        this._clientPool = clientPool;
+            final GuideBuilder guideBuilder) {
+        this._guideBuilder = guideBuilder;
         this._bytesPool = pool;
         
         addFlowLifecycleListener(new FlowLifecycleListener<DownloadFlow>() {
@@ -580,7 +580,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 	}
 
     private void doObtainHttpClient() {
-        this._guide = this._clientPool.createHttpClientGuide();
+        this._guide = this._guideBuilder.createHttpClientGuide();
         
         this._guide.obtainHttpClient(
                 this._guideId.updateIdAndGet(), 
@@ -646,7 +646,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
     }
 
     private Downloadable _downloadable;
-    private final HttpClientPool _clientPool;
+    private final GuideBuilder _guideBuilder;
     private final BytesPool _bytesPool;
 	private int    _maxRetryCount = -1;
 	private int    _retryCount = 0;

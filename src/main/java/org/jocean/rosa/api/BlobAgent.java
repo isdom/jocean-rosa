@@ -15,7 +15,7 @@ import org.jocean.idiom.block.Blob;
  */
 public interface BlobAgent {
     
-    public interface BlobTransaction extends Detachable {
+    public interface BlobTask extends Detachable {
         public <CTX> void start(final URI uri, final CTX ctx,
                 final BlobReactor<CTX> reactor, final TransactionPolicy policy);
     }
@@ -64,5 +64,5 @@ public interface BlobAgent {
 	 * 
 	 * @return
 	 */
-	public BlobTransaction createBlobTransaction();
+	public BlobTask createBlobTask();
 }

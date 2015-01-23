@@ -27,7 +27,7 @@ import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
-import org.jocean.httpclient.api.HttpClientPool;
+import org.jocean.httpclient.api.GuideBuilder;
 import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -63,18 +63,18 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
 
     public SignalTransactionFlow(
             final BytesPool pool,
-            final HttpClientPool clientPool,
+            final GuideBuilder guideBuilder,
             final SignalConverter signalConverter) {
-        this(pool, clientPool, signalConverter, null);
+        this(pool, guideBuilder, signalConverter, null);
     }
 
     public SignalTransactionFlow(
             final BytesPool pool,
-            final HttpClientPool clientPool,
+            final GuideBuilder guideBuilder,
             final SignalConverter signalConverter, 
             final HttpRequestProcessor processor) {
         this._bytesStream = new PooledBytesOutputStream(pool);
-        this._clientPool = clientPool;
+        this._guideBuilder = guideBuilder;
         this._converter = signalConverter;
         this._httpRequestProcessor = processor;
 
@@ -479,7 +479,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
     }
 
     private void startObtainHttpClient() {
-        this._guide = this._clientPool.createHttpClientGuide();
+        this._guide = this._guideBuilder.createHttpClientGuide();
         this._guide.obtainHttpClient(
                 this._guideId.updateIdAndGet(),
                 genGuideReactor(),
@@ -543,7 +543,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
         return ret;
     }
 
-    private final HttpClientPool _clientPool;
+    private final GuideBuilder _guideBuilder;
     private final SignalConverter _converter;
     private final HttpRequestProcessor _httpRequestProcessor;
     private Object _request;

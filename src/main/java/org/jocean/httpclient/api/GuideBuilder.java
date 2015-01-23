@@ -7,6 +7,6 @@ package org.jocean.httpclient.api;
  * @author isdom
  *
  */
-public interface HttpClientPool {
+public interface GuideBuilder {
     public Guide createHttpClientGuide();
 }
