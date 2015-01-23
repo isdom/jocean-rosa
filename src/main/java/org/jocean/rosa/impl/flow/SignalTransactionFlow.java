@@ -23,11 +23,11 @@ import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnDelayed;
 import org.jocean.event.api.annotation.OnEvent;
-import org.jocean.httpclient.HttpStack;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
+import org.jocean.httpclient.api.HttpClientPool;
 import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -63,18 +63,18 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
 
     public SignalTransactionFlow(
             final BytesPool pool,
-            final HttpStack stack,
+            final HttpClientPool clientPool,
             final SignalConverter signalConverter) {
-        this(pool, stack, signalConverter, null);
+        this(pool, clientPool, signalConverter, null);
     }
 
     public SignalTransactionFlow(
             final BytesPool pool,
-            final HttpStack stack,
+            final HttpClientPool clientPool,
             final SignalConverter signalConverter, 
             final HttpRequestProcessor processor) {
         this._bytesStream = new PooledBytesOutputStream(pool);
-        this._stack = stack;
+        this._clientPool = clientPool;
         this._converter = signalConverter;
         this._httpRequestProcessor = processor;
 
@@ -479,7 +479,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
     }
 
     private void startObtainHttpClient() {
-        this._guide = this._stack.createHttpClientGuide();
+        this._guide = this._clientPool.createHttpClientGuide();
         this._guide.obtainHttpClient(
                 this._guideId.updateIdAndGet(),
                 genGuideReactor(),
@@ -543,7 +543,7 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
         return ret;
     }
 
-    private final HttpStack _stack;
+    private final HttpClientPool _clientPool;
     private final SignalConverter _converter;
     private final HttpRequestProcessor _httpRequestProcessor;
     private Object _request;

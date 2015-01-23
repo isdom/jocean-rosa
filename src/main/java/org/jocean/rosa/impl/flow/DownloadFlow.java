@@ -23,11 +23,11 @@ import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnDelayed;
 import org.jocean.event.api.annotation.OnEvent;
-import org.jocean.httpclient.HttpStack;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
+import org.jocean.httpclient.api.HttpClientPool;
 import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -52,8 +52,8 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 
     public DownloadFlow(
             final BytesPool pool,
-            final HttpStack stack) {
-        this._stack = stack;
+            final HttpClientPool clientPool) {
+        this._clientPool = clientPool;
         this._bytesPool = pool;
         
         addFlowLifecycleListener(new FlowLifecycleListener<DownloadFlow>() {
@@ -580,7 +580,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
 	}
 
     private void doObtainHttpClient() {
-        this._guide = this._stack.createHttpClientGuide();
+        this._guide = this._clientPool.createHttpClientGuide();
         
         this._guide.obtainHttpClient(
                 this._guideId.updateIdAndGet(), 
@@ -646,7 +646,7 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
     }
 
     private Downloadable _downloadable;
-    private final HttpStack _stack;
+    private final HttpClientPool _clientPool;
     private final BytesPool _bytesPool;
 	private int    _maxRetryCount = -1;
 	private int    _retryCount = 0;

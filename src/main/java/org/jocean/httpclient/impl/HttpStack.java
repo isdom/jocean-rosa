@@ -26,31 +26,38 @@ import org.slf4j.LoggerFactory;
  * @author isdom
  *
  */
-public class Mediator implements HttpClientPool {
+public class HttpStack implements HttpClientPool {
     
     private static final Logger LOG = LoggerFactory
-            .getLogger(Mediator.class);
+            .getLogger(HttpStack.class);
 
-    public Mediator(
+    public HttpStack(
+            final EventReceiverSource source,
+            final NettyClient client,
+            final int maxHttpConnectionCount) {
+        this(source, source, client, maxHttpConnectionCount);
+    }
+    
+    public HttpStack(
             final EventReceiverSource source4guide,
             final EventReceiverSource source4channel, 
             final NettyClient client,
-            final int maxChannelCount) {
+            final int maxHttpConnectionCount) {
         this._source4guide = source4guide;
         this._source4channel = source4channel;
         this._client = client;
-        this._maxChannelCount = maxChannelCount;
+        this._maxChannelCount = maxHttpConnectionCount;
     }
 
-    public int getMaxChannelCount() {
+    public int getMaxHttpConnectionCount() {
         return this._maxChannelCount;
     }
     
-    public int getTotalChannelCount() {
+    public int getTotalHttpConnectionCount() {
         return this._currentChannelCount.get();
     }
     
-    public int getBindedChannelCount() {
+    public int getBindedHttpConnectionCount() {
         return this._bindedChannelCount.get();
     }
     
@@ -168,11 +175,11 @@ public class Mediator implements HttpClientPool {
     
     private final ChannelFlow.Toolkit _channelToolkit = new ChannelFlow.Toolkit() {
         public URI genDomainByURI(final URI uri) {
-            return Mediator.genDomainByURI(uri);
+            return HttpStack.genDomainByURI(uri);
         }
         
         public Channel newChannel() {
-            return Mediator.this._client.newChannel();
+            return HttpStack.this._client.newChannel();
         }
     };
     

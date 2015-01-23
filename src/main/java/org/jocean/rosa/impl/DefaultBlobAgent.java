@@ -4,7 +4,7 @@
 package org.jocean.rosa.impl;
 
 import org.jocean.event.api.EventReceiverSource;
-import org.jocean.httpclient.HttpStack;
+import org.jocean.httpclient.api.HttpClientPool;
 import org.jocean.idiom.pool.BytesPool;
 import org.jocean.rosa.api.BlobAgent;
 import org.jocean.rosa.api.HttpBodyPartRepo;
@@ -25,7 +25,7 @@ public class DefaultBlobAgent implements BlobAgent {
     @Override
     public BlobTransaction createBlobTransaction() {
         final BlobTransactionFlow flow = 
-                new BlobTransactionFlow( this._pool, this._stack, this._partRepo);
+                new BlobTransactionFlow( this._pool, this._clientPool, this._partRepo);
         _source.create(flow, flow.WAIT);
         
         return flow.queryInterfaceInstance(BlobTransaction.class);
@@ -33,17 +33,17 @@ public class DefaultBlobAgent implements BlobAgent {
 
 	public DefaultBlobAgent(
 	        final BytesPool pool,
-	        final HttpStack httpStack, 
+	        final HttpClientPool clientPool, 
 			final EventReceiverSource source, 
 			final HttpBodyPartRepo repo) {
 	    this._pool = pool;
-		this._stack = httpStack;
+		this._clientPool = clientPool;
 		this._source = source;
 		this._partRepo = repo;
 	}
 	
 	private final BytesPool _pool;
-	private final HttpStack _stack;
+	private final HttpClientPool _clientPool;
 	private final EventReceiverSource _source;
 	private final HttpBodyPartRepo _partRepo;
 }

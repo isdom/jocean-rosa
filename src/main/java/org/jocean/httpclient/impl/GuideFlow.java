@@ -37,6 +37,7 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         public EventReceiver[] currentChannelsSnapshot();
     }
     
+    @SuppressWarnings("unused")
     private final static String[] _LEVEL_AS_STRING = new String[]{"IDLE_AND_MATCH", "INACTIVE", "IDLE_BUT_NOT_MATCH", "CAN_BE_INTERRUPTED"};
     interface ChannelRecommendReactor {
         static final int IDLE_AND_MATCH = 0;

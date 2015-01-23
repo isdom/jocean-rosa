@@ -26,7 +26,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
 import org.jocean.event.api.EventReceiverSource;
-import org.jocean.httpclient.HttpStack;
+import org.jocean.httpclient.api.HttpClientPool;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
 import org.jocean.idiom.Function;
@@ -62,7 +62,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
     @Override
 	public SignalTransaction createSignalTransaction() {
 		final SignalTransactionFlow flow = 
-				new SignalTransactionFlow(this._pool, this._stack, this._converter);
+				new SignalTransactionFlow(this._pool, this._clientPool, this._converter);
 		this._source.create(flow, flow.WAIT);
 		
 		return flow.queryInterfaceInstance(SignalTransaction.class);
@@ -72,7 +72,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
     public SignalTransaction createSignalTransaction(
             final HttpRequestProcessor processor) {
         final SignalTransactionFlow flow = 
-                new SignalTransactionFlow(this._pool, this._stack, this._converter, processor);
+                new SignalTransactionFlow(this._pool, this._clientPool, this._converter, processor);
         this._source.create(flow, flow.WAIT);
         
         return flow.queryInterfaceInstance(SignalTransaction.class);
@@ -80,10 +80,10 @@ public class BusinessServerImpl implements BusinessServerAgent {
     
 	public BusinessServerImpl(
             final BytesPool pool,
-	        final HttpStack httpStack, 
+	        final HttpClientPool clientPool, 
 			final EventReceiverSource source) {
         this._pool = pool;
-		this._stack = httpStack;
+		this._clientPool = clientPool;
 		this._source = source;
 	}
 	
@@ -108,7 +108,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
     }
 
     private final BytesPool _pool;
-    private final HttpStack _stack;
+    private final HttpClientPool _clientPool;
 	private final EventReceiverSource _source;
 	
 	private final Map<Class<?>, Pair<String, Integer>> _req2pathPrefix = 

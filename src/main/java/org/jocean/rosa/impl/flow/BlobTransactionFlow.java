@@ -24,11 +24,11 @@ import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnEvent;
-import org.jocean.httpclient.HttpStack;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.Guide.GuideReactor;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.httpclient.api.HttpClient.HttpReactor;
+import org.jocean.httpclient.api.HttpClientPool;
 import org.jocean.httpclient.impl.HttpUtils;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
@@ -56,10 +56,10 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
 
     public BlobTransactionFlow(
             final BytesPool pool,
-            final HttpStack stack, 
+            final HttpClientPool clientPool, 
             final HttpBodyPartRepo repo) {
         this._bytesStream = new PooledBytesOutputStream(pool);
-        this._stack = stack;
+        this._clientPool = clientPool;
         this._partRepo = repo;
         
         addFlowLifecycleListener(new FlowLifecycleListener<BlobTransactionFlow>() {
@@ -582,7 +582,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
             }
         }
         
-        this._guide = this._stack.createHttpClientGuide();
+        this._guide = this._clientPool.createHttpClientGuide();
         
         this._guide.obtainHttpClient(
                 this._guideId.updateIdAndGet(), 
@@ -657,7 +657,7 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
     
     private URI _uri;
     private final HttpBodyPartRepo _partRepo;
-    private final HttpStack _stack;
+    private final HttpClientPool _clientPool;
 	private int    _maxRetryCount = -1;
 	private int    _retryCount = 0;
     private long   _timeoutFromActived = -1;
