@@ -227,8 +227,9 @@ public class HttpUtils {
 	
 	static boolean ENABLE_HTTP_LOG = false;
 	
-	static public void enableHttpTransportLog(final boolean enabled) {
+	static public boolean enableHttpTransportLog(final boolean enabled) {
 	    ENABLE_HTTP_LOG = enabled;
+	    return enabled;
 	}
 	
 	//	change to package static method
