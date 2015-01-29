@@ -123,11 +123,17 @@ public class HttpUtils {
 		if ( status.code() == 204 || status.code() == 304 ) {
 			return false;
 		}
-		if ( HttpHeaders.isTransferEncodingChunked(response) ) {
+		if (HttpHeaders.isTransferEncodingChunked(response)) {
 			return true;
 		}
-		if ( HttpHeaders.isContentLengthSet(response)) {
+		if (HttpHeaders.isContentLengthSet(response)) {
 			return (HttpHeaders.getContentLength(response) > 0);
+		}
+		//    add 2015-01-29 to fix bug for Connection: close setted response
+		if (!HttpHeaders.isKeepAlive(response) ) {
+		    //    如果采用短连接（Http Message头部Connection:close），则直接可以通过服务器关闭连接来确定消息的传输长度。
+		    //    因此此时默认认为 response 还有更多的Http Content
+		    return true;
 		}
 		return false;
 	}

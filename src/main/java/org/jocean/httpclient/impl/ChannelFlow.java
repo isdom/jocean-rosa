@@ -491,6 +491,9 @@ class ChannelFlow extends AbstractFlow<ChannelFlow>
             return currentEventHandler();
         }
         
+        //  2015-01-29备注：
+        //  当该该次HTTP事务的HTTP Response是 Connection: close时，应该不会收到LASTHTTPCONTENTRECEIVED事件
+        //  但当Server侧发送完消息后，会主动关闭Socket，因此channel flow状态会因为接收到CHANNEL_INACTIVE而回到INACTIVE状态
         @OnEvent(event = HttpEvents.LASTHTTPCONTENTRECEIVED)
         private BizStep lastContentReceived(
                 final ChannelHandlerContext ctx,final LastHttpContent content)
