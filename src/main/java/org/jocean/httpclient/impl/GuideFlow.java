@@ -10,6 +10,7 @@ import org.jocean.event.api.AbstractFlow;
 import org.jocean.event.api.AbstractUnhandleAware;
 import org.jocean.event.api.BizStep;
 import org.jocean.event.api.EventReceiver;
+import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.event.api.annotation.OnEvent;
 import org.jocean.event.api.internal.Eventable;
 import org.jocean.httpclient.api.Guide;
@@ -18,15 +19,25 @@ import org.jocean.httpclient.api.Guide.Requirement;
 import org.jocean.httpclient.api.HttpClient;
 import org.jocean.idiom.Detachable;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.idiom.ProxyBuilder;
+import org.jocean.idiom.Slf4jLoggerSource;
 import org.jocean.idiom.ValidationId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.helpers.NOPLogger;
 
 /**
  * @author isdom
  *
  */
-class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow> {
+class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>, Slf4jLoggerSource{
+    
+    private final ProxyBuilder<Logger> _proxyLogger = new ProxyBuilder<Logger>(Logger.class);
+    
+    @Override
+    public Logger getLogger() {
+        return this._proxyLogger.buildProxy();
+    }
     
     interface Publisher {
         public void publishGuideAtPending(final GuideFlow guideFlow);
@@ -54,7 +65,6 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
     
     //  request recommend channels event
     //  params: Requirement  ChannelRecommendReactor
-
     
     static final String NOTIFY_GUIDE_FOR_BINDING_ABORT = "_notify_guide_for_binding_abort";
     
@@ -62,8 +72,28 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
             .getLogger(GuideFlow.class);
 
     GuideFlow(final Publisher publisher ) {
+        this._proxyLogger.setImpl(LOG);
         this._publisher = publisher;
-    }
+        
+        this.addFlowLifecycleListener(_LIFECYCLE_LISTENER);
+   }
+    
+    private static final FlowLifecycleListener<GuideFlow> _LIFECYCLE_LISTENER = 
+            new FlowLifecycleListener<GuideFlow>() {
+
+        @Override
+        public void afterEventReceiverCreated(
+                final GuideFlow flow, final EventReceiver receiver)
+                throws Exception {
+        }
+
+        @Override
+        public void afterFlowDestroy(final GuideFlow flow)
+                throws Exception {
+            //  replace logger to nop logger to disable all log message after flow destroy
+            flow._proxyLogger.setImpl(NOPLogger.NOP_LOGGER);
+        }
+    };
     
     final BizStep UNOBTAIN = new BizStep("httpguide.UNOBTAIN") {
         @OnEvent(event = "detach")

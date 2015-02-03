@@ -12,6 +12,8 @@ TODO:
     Expires: Sun, 17 Aug 2014 23:05:12 GMT
     Cache-Control: max-age=679065
   等字段信息进行细致的缓存的超时控制。
+  
+  2、解决屏蔽此类WARN信息： 2015-02-02 22:29:18.307 [xharbor-flowexecutor-1-thread-574]  WARN |-o.jocean.event.core.FlowContextImpl:257 - flow GuideFlow [requirement=(priority:0,uri:http://10.168.212.30:8080), guideReactor(not null), channelReceiver(not null)] already destroy, ignore pending event:(_notify_guide_for_channel_lost) 
 
 2014-09-30:  release 0.0.9 版本：
   1、重构httpclient部分的实现代码，将原有通过MediatorFlow 实现的 协调 Guide & Channel 之间的业务逻辑，调整为主要由 Guide & Channel之间直接通讯完成。
