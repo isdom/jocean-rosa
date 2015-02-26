@@ -125,7 +125,7 @@ public class HttpServer {
                 else if (msg instanceof HttpContent) {
                     final ServerTask task = getTaskOf(ctx);
                     if ( null != task ) {
-                        task.sendHttpContent((HttpContent)msg);
+                        task.onHttpContent((HttpContent)msg);
                     }
                     else {
                         LOG.warn("NO WORK TASK, messageReceived:{} unhandled msg [{}]",ctx.channel(),msg);
