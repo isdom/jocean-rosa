@@ -25,7 +25,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 
-import org.jocean.event.api.EventReceiverSource;
+import org.jocean.event.api.EventEngine;
 import org.jocean.httpclient.api.GuideBuilder;
 import org.jocean.idiom.AnnotationWrapper;
 import org.jocean.idiom.ExceptionUtils;
@@ -63,7 +63,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 	public SignalTask createSignalTask() {
 		final SignalTransactionFlow flow = 
 				new SignalTransactionFlow(this._pool, this._guideBuilder, this._converter);
-		this._source.create(flow, flow.WAIT);
+		this._engine.create(flow, flow.WAIT);
 		
 		return flow.queryInterfaceInstance(SignalTask.class);
 	}
@@ -73,7 +73,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
             final HttpRequestProcessor processor) {
         final SignalTransactionFlow flow = 
                 new SignalTransactionFlow(this._pool, this._guideBuilder, this._converter, processor);
-        this._source.create(flow, flow.WAIT);
+        this._engine.create(flow, flow.WAIT);
         
         return flow.queryInterfaceInstance(SignalTask.class);
     }
@@ -81,10 +81,10 @@ public class BusinessServerImpl implements BusinessServerAgent {
 	public BusinessServerImpl(
             final BytesPool pool,
 	        final GuideBuilder guideBuilder, 
-			final EventReceiverSource source) {
+			final EventEngine engine) {
         this._pool = pool;
 		this._guideBuilder = guideBuilder;
-		this._source = source;
+		this._engine = engine;
 	}
 	
 	public BusinessServerImpl registerRequestType(final Class<?> reqCls, final String pathPrefix, 
@@ -109,7 +109,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 
     private final BytesPool _pool;
     private final GuideBuilder _guideBuilder;
-	private final EventReceiverSource _source;
+	private final EventEngine _engine;
 	
 	private final Map<Class<?>, Pair<String, Integer>> _req2pathPrefix = 
 	        new ConcurrentHashMap<Class<?>, Pair<String, Integer>>();

@@ -12,8 +12,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jocean.event.api.EventEngine;
 import org.jocean.event.api.EventReceiver;
-import org.jocean.event.api.EventReceiverSource;
 import org.jocean.event.api.FlowLifecycleListener;
 import org.jocean.httpclient.api.Guide;
 import org.jocean.httpclient.api.GuideBuilder;
@@ -32,19 +32,19 @@ public class HttpClientPool implements GuideBuilder {
             .getLogger(HttpClientPool.class);
 
     public HttpClientPool(
-            final EventReceiverSource source,
+            final EventEngine engine,
             final NettyClient client,
             final int maxHttpConnectionCount) {
-        this(source, source, client, maxHttpConnectionCount);
+        this(engine, engine, client, maxHttpConnectionCount);
     }
     
     public HttpClientPool(
-            final EventReceiverSource source4guide,
-            final EventReceiverSource source4channel, 
+            final EventEngine engine4guide,
+            final EventEngine engine4channel, 
             final NettyClient client,
             final int maxHttpConnectionCount) {
-        this._source4guide = source4guide;
-        this._source4channel = source4channel;
+        this._engine4guide = engine4guide;
+        this._engine4channel = engine4channel;
         this._client = client;
         this._maxChannelCount = maxHttpConnectionCount;
     }
@@ -69,7 +69,7 @@ public class HttpClientPool implements GuideBuilder {
     public Guide createHttpClientGuide() {
         final GuideFlow flow = new GuideFlow(this._guidePublisher);
         
-        this._source4guide.create(flow, flow.UNOBTAIN );
+        this._engine4guide.create(flow, flow.UNOBTAIN );
         return flow.queryInterfaceInstance(Guide.class);
     }
     
@@ -169,7 +169,7 @@ public class HttpClientPool implements GuideBuilder {
                 this._channelToolkit)
             .addFlowLifecycleListener(this._channelFlowLifecycleListener);
         
-        this._source4channel.create(channelFlow, channelFlow.INACTIVE );
+        this._engine4channel.create(channelFlow, channelFlow.INACTIVE );
         return channelFlow;
     }
     
@@ -239,6 +239,6 @@ public class HttpClientPool implements GuideBuilder {
     private final Queue<GuideFlow> _pendingGuides = new PriorityBlockingQueue<GuideFlow>();
     
     private final NettyClient _client;
-    private final EventReceiverSource _source4guide;
-    private final EventReceiverSource _source4channel;
+    private final EventEngine _engine4guide;
+    private final EventEngine _engine4channel;
 }
