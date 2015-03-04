@@ -30,7 +30,7 @@ import java.io.InputStream;
 * -keystore cert.jks
 * </pre>
 */
-public final class SecureChatKeyStore {
+public final class AndroidSslKeyStore {
     private static final short[] DATA = {
     	//	JKS format not implements in android
 //        0xfe, 0xed, 0xfe, 0xed, 0x00, 0x00, 0x00, 0x02,
@@ -569,7 +569,7 @@ public final class SecureChatKeyStore {
         return "secret".toCharArray();
     }
 
-    private SecureChatKeyStore() {
+    private AndroidSslKeyStore() {
         // Unused
     }
 }

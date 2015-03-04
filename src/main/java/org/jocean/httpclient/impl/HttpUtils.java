@@ -40,7 +40,7 @@ import org.jocean.netty.EventReceiverInboundHandler;
 import org.jocean.netty.NettyEvents;
 import org.jocean.netty.NettyUtils;
 import org.jocean.ssl.FixNeverReachFINISHEDStateSSLEngine;
-import org.jocean.ssl.SecureChatSslContextFactory;
+import org.jocean.ssl.AndroidSslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -265,7 +265,7 @@ public class HttpUtils {
         final boolean sslEnabled = "https".equalsIgnoreCase(scheme);
         if ( sslEnabled ) {
             final SSLEngine engine =
-                SecureChatSslContextFactory.getClientContext().createSSLEngine();
+                AndroidSslContextFactory.getClientContext().createSSLEngine();
             engine.setUseClientMode(true);
 
             p.addLast("ssl", new SslHandler(

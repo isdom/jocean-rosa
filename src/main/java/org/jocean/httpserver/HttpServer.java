@@ -25,14 +25,18 @@ import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.ssl.SslHandler;
 //import io.netty.handler.traffic.TrafficCounterExt;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 
 import java.io.IOException;
 
+import javax.net.ssl.SSLEngine;
+
 import org.jocean.httpserver.ServerAgent.ServerTask;
 import org.jocean.idiom.ExceptionUtils;
+import org.jocean.ssl.J2SESslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +64,9 @@ public class HttpServer {
     
 //    private TrafficCounterExt _trafficCounterExt;
     private boolean _isCompressContent;
+    private boolean _enableSSL;
     
-    private ServerAgent  _serverAgent;
+	private ServerAgent  _serverAgent;
     
     //响应检查服务是否活着的请求
     private String _checkAlivePath = null;
@@ -155,12 +160,19 @@ public class HttpServer {
         this._baseInitializer = new BaseInitializer<NioServerSocketChannel>(){
             @Override
             protected void addCodecHandler(final ChannelPipeline pipeline) throws Exception {
+                if ( _enableSSL ) {
+                    // Uncomment the following line if you want HTTPS
+                    final SSLEngine engine = J2SESslContextFactory.getServerContext().createSSLEngine();
+                    engine.setUseClientMode(false);
+                    pipeline.addLast("ssl", new SslHandler(engine));
+                }
+                
                 //IN decoder
                 pipeline.addLast("decoder",new HttpRequestDecoder());
                 //OUT 统计数据流大小 这个handler需要放在HttpResponseToByteEncoder前面处理
 //                pipeline.addLast("statistics",new StatisticsResponseHandler()); 
                 //OUT encoder
-                pipeline.addLast("encoder-object",new HttpResponseEncoder());
+                pipeline.addLast("encoder",new HttpResponseEncoder());
                 
                 //IN/OUT 支持压缩
                 if ( _isCompressContent ) {
@@ -346,4 +358,13 @@ public class HttpServer {
     public void setCompressContent(final boolean isCompressContent) {
         this._isCompressContent = isCompressContent;
     }
+    
+    public boolean isEnableSSL() {
+		return this._enableSSL;
+	}
+
+	public void setEnableSSL(final boolean enableSSL) {
+		this._enableSSL = enableSSL;
+	}
+
 }
