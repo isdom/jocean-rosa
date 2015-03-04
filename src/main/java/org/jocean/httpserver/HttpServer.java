@@ -25,18 +25,14 @@ import io.netty.handler.codec.http.HttpRequestDecoder;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseEncoder;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.util.SelfSignedCertificate;
 //import io.netty.handler.traffic.TrafficCounterExt;
 import io.netty.util.AttributeKey;
 import io.netty.util.ReferenceCountUtil;
 
-import java.io.IOException;
-
-import javax.net.ssl.SSLEngine;
-
 import org.jocean.httpserver.ServerAgent.ServerTask;
 import org.jocean.idiom.ExceptionUtils;
-import org.jocean.ssl.J2SESslContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,11 +54,14 @@ public class HttpServer {
     
     private int _acceptPort = 65000;
     private String _acceptIp = "0.0.0.0";
-    private final ServerBootstrap _bootstrap = new ServerBootstrap();
+    
     private final EventLoopGroup _acceptorGroup = new NioEventLoopGroup();
     private final EventLoopGroup _clientGroup = new NioEventLoopGroup();
     
 //    private TrafficCounterExt _trafficCounterExt;
+    private boolean _logByteStream;
+    // 为了避免建立了过多的闲置连接 闲置180秒的连接主动关闭
+    private int 	_idleTimeSeconds = 180;
     private boolean _isCompressContent;
     private boolean _enableSSL;
     
@@ -70,7 +69,6 @@ public class HttpServer {
     
     //响应检查服务是否活着的请求
     private String _checkAlivePath = null;
-    private final BaseInitializer<NioServerSocketChannel> _baseInitializer;
     private final WorkHandler _workHandler = new WorkHandler();
     
     @ChannelHandler.Sharable
@@ -156,42 +154,6 @@ public class HttpServer {
         }
     }
     
-    public HttpServer() {
-        this._baseInitializer = new BaseInitializer<NioServerSocketChannel>(){
-            @Override
-            protected void addCodecHandler(final ChannelPipeline pipeline) throws Exception {
-                if ( _enableSSL ) {
-                    // Uncomment the following line if you want HTTPS
-                    final SSLEngine engine = J2SESslContextFactory.getServerContext().createSSLEngine();
-                    engine.setUseClientMode(false);
-                    pipeline.addLast("ssl", new SslHandler(engine));
-                }
-                
-                //IN decoder
-                pipeline.addLast("decoder",new HttpRequestDecoder());
-                //OUT 统计数据流大小 这个handler需要放在HttpResponseToByteEncoder前面处理
-//                pipeline.addLast("statistics",new StatisticsResponseHandler()); 
-                //OUT encoder
-                pipeline.addLast("encoder",new HttpResponseEncoder());
-                
-                //IN/OUT 支持压缩
-                if ( _isCompressContent ) {
-                    pipeline.addLast("deflater", new HttpContentCompressor());
-                }
-            }
-            
-            @Override
-            protected void addBusinessHandler(final ChannelPipeline pipeline) throws Exception {
-                pipeline.addLast("biz-handler", _workHandler);
-            }
-        };
-        
-        // 因为响应可能不是message，logMessage无法处理
-        this._baseInitializer.setLogMessage(false);
-        // 为了避免建立了过多的闲置连接 闲置180秒的连接主动关闭
-        this._baseInitializer.setIdleTimeSeconds(180);
-    }
-    
     /**
      * @param ctx
      * @param request
@@ -216,8 +178,9 @@ public class HttpServer {
         }
     }
     
-    public void start() throws IOException, InterruptedException {
-        this._bootstrap.group(this._acceptorGroup,this._clientGroup)
+    public void start() throws Exception {
+    	final ServerBootstrap bootstrap = 
+    			new ServerBootstrap().group(this._acceptorGroup,this._clientGroup)
                 .channel(NioServerSocketChannel.class)
                 .localAddress(this._acceptIp,this._acceptPort)
                 /*
@@ -274,14 +237,57 @@ public class HttpServer {
 //            this._baseInitializer.setTrafficCounter(this._trafficCounterExt);
 //        }
         
-        this._bootstrap.childHandler(this._baseInitializer);
-
+		final SslContext sslCtx;
+        if (this._enableSSL) {
+            SelfSignedCertificate ssc = new SelfSignedCertificate();
+            sslCtx = SslContext.newServerContext(ssc.certificate(), ssc.privateKey());
+        } else {
+            sslCtx = null;
+        }
+        final BaseInitializer<NioServerSocketChannel> initializer = 
+        		new BaseInitializer<NioServerSocketChannel>(){
+            @Override
+            protected void addCodecHandler(final ChannelPipeline pipeline) throws Exception {
+            	if (sslCtx != null) {
+            		pipeline.addLast(sslCtx.newHandler(pipeline.channel().alloc()));
+                }
+            	
+//                final SSLEngine engine = J2SESslContextFactory.getServerContext().createSSLEngine();
+//                engine.setUseClientMode(false);
+//                pipeline.addLast("ssl", new SslHandler(engine));
+                
+                //IN decoder
+                pipeline.addLast("decoder",new HttpRequestDecoder());
+                //OUT 统计数据流大小 这个handler需要放在HttpResponseToByteEncoder前面处理
+//                pipeline.addLast("statistics",new StatisticsResponseHandler()); 
+                //OUT encoder
+                pipeline.addLast("encoder",new HttpResponseEncoder());
+                
+                //IN/OUT 支持压缩
+                if ( _isCompressContent ) {
+                    pipeline.addLast("deflater", new HttpContentCompressor());
+                }
+            }
+            
+            @Override
+            protected void addBusinessHandler(final ChannelPipeline pipeline) throws Exception {
+                pipeline.addLast("biz-handler", _workHandler);
+            }
+        };
+        
+        initializer.setLogByteStream(this._logByteStream);
+        initializer.setIdleTimeSeconds(this._idleTimeSeconds);
+        // 因为响应可能不是message，logMessage无法处理
+        initializer.setLogMessage(false);
+        
+        bootstrap.childHandler(initializer);
+        
         int retryCount = 0;
         boolean binded = false;
 
         do {
             try {
-                this._acceptorChannel = this._bootstrap.bind().channel();
+                this._acceptorChannel = bootstrap.bind().channel();
                 binded = true;
             } catch (final ChannelException e) {
                 LOG.warn("start failed : {}, and retry...", e);
@@ -324,11 +330,11 @@ public class HttpServer {
 //    }
 
     public void setLogByteStream(final boolean logByteStream) {
-        this._baseInitializer.setLogByteStream(logByteStream);
+        this._logByteStream = logByteStream;
     }
 
     public void setIdleTimeSeconds(final int idleTimeSeconds) {
-        this._baseInitializer.setIdleTimeSeconds(idleTimeSeconds);
+        this._idleTimeSeconds = idleTimeSeconds;
     }
  
 //    public void setPacketsFrequency(int packetsFrequency) {
