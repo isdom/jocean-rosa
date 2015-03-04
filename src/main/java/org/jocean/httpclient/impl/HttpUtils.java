@@ -52,6 +52,16 @@ public class HttpUtils {
 	private static final Logger LOG =
 			LoggerFactory.getLogger(HttpUtils.class);
 	
+    public static boolean isHttpClientError(final HttpResponse response) {
+        return response.getStatus().code() >= 400 
+            && response.getStatus().code() < 500;
+    }
+
+    public static boolean isHttpServerError(final HttpResponse response) {
+        return response.getStatus().code() >= 500 
+            && response.getStatus().code() < 600;
+    }
+    
 	// return downloadable content's total length 
 	// (NOTE: 在断点续传的情况下 内容总长度不是本次传输长度而是包含已下载部分的内容总长度 )
 	// 返回值 可以为null
