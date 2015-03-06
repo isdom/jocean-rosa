@@ -63,7 +63,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
 	public SignalTask createSignalTask() {
 		final SignalTransactionFlow flow = 
 				new SignalTransactionFlow(this._pool, this._guideBuilder, this._converter);
-		this._engine.create(flow, flow.WAIT);
+		this._engine.create(flow.toString(), flow.WAIT, flow);
 		
 		return flow.queryInterfaceInstance(SignalTask.class);
 	}
@@ -73,7 +73,7 @@ public class BusinessServerImpl implements BusinessServerAgent {
             final HttpRequestProcessor processor) {
         final SignalTransactionFlow flow = 
                 new SignalTransactionFlow(this._pool, this._guideBuilder, this._converter, processor);
-        this._engine.create(flow, flow.WAIT);
+        this._engine.create(flow.toString(), flow.WAIT, flow);
         
         return flow.queryInterfaceInstance(SignalTask.class);
     }

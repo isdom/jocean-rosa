@@ -75,25 +75,20 @@ class GuideFlow extends AbstractFlow<GuideFlow> implements Comparable<GuideFlow>
         this._proxyLogger.setImpl(LOG);
         this._publisher = publisher;
         
-        this.addFlowLifecycleListener(_LIFECYCLE_LISTENER);
+        this.addFlowLifecycleListener(new FlowLifecycleListener() {
+
+            @Override
+            public void afterEventReceiverCreated(final EventReceiver receiver)
+                    throws Exception {
+            }
+
+            @Override
+            public void afterFlowDestroy()
+                    throws Exception {
+                //  replace logger to nop logger to disable all log message after flow destroy
+                _proxyLogger.setImpl(NOPLogger.NOP_LOGGER);
+            }});
    }
-    
-    private static final FlowLifecycleListener<GuideFlow> _LIFECYCLE_LISTENER = 
-            new FlowLifecycleListener<GuideFlow>() {
-
-        @Override
-        public void afterEventReceiverCreated(
-                final GuideFlow flow, final EventReceiver receiver)
-                throws Exception {
-        }
-
-        @Override
-        public void afterFlowDestroy(final GuideFlow flow)
-                throws Exception {
-            //  replace logger to nop logger to disable all log message after flow destroy
-            flow._proxyLogger.setImpl(NOPLogger.NOP_LOGGER);
-        }
-    };
     
     final BizStep UNOBTAIN = new BizStep("httpguide.UNOBTAIN") {
         @OnEvent(event = "detach")

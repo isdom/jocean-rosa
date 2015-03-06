@@ -69,7 +69,7 @@ public class HttpClientPool implements GuideBuilder {
     public Guide createHttpClientGuide() {
         final GuideFlow flow = new GuideFlow(this._guidePublisher);
         
-        this._engine4guide.create(flow, flow.UNOBTAIN );
+        this._engine4guide.create(flow.toString(), flow.UNOBTAIN, flow);
         return flow.queryInterfaceInstance(Guide.class);
     }
     
@@ -166,10 +166,24 @@ public class HttpClientPool implements GuideBuilder {
     private ChannelFlow createInactiveChannelFlow() {
         final ChannelFlow channelFlow = new ChannelFlow(
                 this._channelPublisher,
-                this._channelToolkit)
-            .addFlowLifecycleListener(this._channelFlowLifecycleListener);
+                this._channelToolkit);
+        channelFlow.addFlowLifecycleListener(new FlowLifecycleListener() {
+                @Override
+                public void afterEventReceiverCreated(
+                        final EventReceiver receiver) throws Exception {
+                    _currentChannelCount.incrementAndGet();
+                    _channelReceivers.add(receiver);
+                }
         
-        this._engine4channel.create(channelFlow, channelFlow.INACTIVE );
+                @Override
+                public void afterFlowDestroy()
+                        throws Exception {
+                    _channelReceivers.remove(channelFlow.selfEventReceiver());
+                    _currentChannelCount.decrementAndGet();
+                }
+            });
+        
+        this._engine4channel.create(channelFlow.toString(), channelFlow.INACTIVE, channelFlow);
         return channelFlow;
     }
     
@@ -208,23 +222,6 @@ public class HttpClientPool implements GuideBuilder {
             notifyPendingGuideSelectChannel();
         }};
         
-    private final FlowLifecycleListener<ChannelFlow> _channelFlowLifecycleListener = 
-            new FlowLifecycleListener<ChannelFlow>() {
-                @Override
-                public void afterEventReceiverCreated(final ChannelFlow flow,
-                        final EventReceiver receiver) throws Exception {
-                    _currentChannelCount.incrementAndGet();
-                    _channelReceivers.add(receiver);
-                }
-        
-                @Override
-                public void afterFlowDestroy(final ChannelFlow flow)
-                        throws Exception {
-                    _channelReceivers.remove(flow.selfEventReceiver());
-                    _currentChannelCount.decrementAndGet();
-                }
-            };
-            
     private final GuideFlow.Channels _channels = new GuideFlow.Channels() {
         @Override
         public EventReceiver[] currentChannelsSnapshot() {

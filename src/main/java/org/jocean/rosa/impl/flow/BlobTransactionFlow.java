@@ -62,16 +62,15 @@ public class BlobTransactionFlow extends AbstractFlow<BlobTransactionFlow> {
         this._guideBuilder = guideBuilder;
         this._partRepo = repo;
         
-        addFlowLifecycleListener(new FlowLifecycleListener<BlobTransactionFlow>() {
+        addFlowLifecycleListener(new FlowLifecycleListener() {
 
             @Override
-            public void afterEventReceiverCreated(
-                    final BlobTransactionFlow flow, final EventReceiver receiver)
+            public void afterEventReceiverCreated(final EventReceiver receiver)
                     throws Exception {
             }
 
             @Override
-            public void afterFlowDestroy(final BlobTransactionFlow flow)
+            public void afterFlowDestroy()
                     throws Exception {
                 clearCurrentContent();
                 safeReleaseBodyPart();

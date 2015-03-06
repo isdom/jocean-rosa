@@ -78,16 +78,15 @@ public class SignalTransactionFlow extends AbstractFlow<SignalTransactionFlow> {
         this._converter = signalConverter;
         this._httpRequestProcessor = processor;
 
-        addFlowLifecycleListener(new FlowLifecycleListener<SignalTransactionFlow>() {
+        addFlowLifecycleListener(new FlowLifecycleListener() {
 
             @Override
-            public void afterEventReceiverCreated(
-                    SignalTransactionFlow flow, EventReceiver receiver)
+            public void afterEventReceiverCreated(EventReceiver receiver)
                     throws Exception {
             }
 
             @Override
-            public void afterFlowDestroy(SignalTransactionFlow flow)
+            public void afterFlowDestroy()
                     throws Exception {
                 clearCurrentContent();
                 if (null != SignalTransactionFlow.this._forceFinishedTimer) {

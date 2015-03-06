@@ -18,7 +18,7 @@ public class DownloadAgentImpl implements DownloadAgent {
     @Override
     public DownloadTask createDownloadTask() {
         final DownloadFlow flow = new DownloadFlow(this._pool, this._guideBuilder);
-        this._engine.create(flow, flow.WAIT);
+        this._engine.create(flow.toString(), flow.WAIT, flow);
         
         return flow.queryInterfaceInstance(DownloadTask.class);
     }

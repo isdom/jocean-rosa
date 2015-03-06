@@ -56,16 +56,15 @@ public class DownloadFlow extends AbstractFlow<DownloadFlow> {
         this._guideBuilder = guideBuilder;
         this._bytesPool = pool;
         
-        addFlowLifecycleListener(new FlowLifecycleListener<DownloadFlow>() {
+        addFlowLifecycleListener(new FlowLifecycleListener() {
 
             @Override
-            public void afterEventReceiverCreated(
-                    final DownloadFlow flow, final EventReceiver receiver)
+            public void afterEventReceiverCreated(final EventReceiver receiver)
                     throws Exception {
             }
 
             @Override
-            public void afterFlowDestroy(final DownloadFlow flow)
+            public void afterFlowDestroy()
                     throws Exception {
                 try {
                     safeDetachForceFinishedTimer();
