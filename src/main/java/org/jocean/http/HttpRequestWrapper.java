@@ -174,7 +174,7 @@ public class HttpRequestWrapper {
         else {
             final BizStep recvContent = new RecvContentFully(recvContentName, whenRecvContent, whenRecvFully, nextStep);
             for (Object handler : handlers) {
-            	recvContent.handler(DefaultInvoker.invokers(handler, OnEvent.class));
+            	recvContent.handler(DefaultInvoker.invokers(handler));
             }
             return recvContent.freeze();
         }
